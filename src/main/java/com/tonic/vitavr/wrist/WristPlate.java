@@ -65,6 +65,7 @@ public final class WristPlate
         {
             centre[axis] = at[axis] - forward[axis] * BACK_METRES - up[axis] * DOWN_METRES + normal[axis] * OUT_METRES;
         }
+        turnToHand();
         placed = true;
     }
 
@@ -82,7 +83,21 @@ public final class WristPlate
         up[0] = out[1] * along[2] - out[2] * along[1];
         up[1] = out[2] * along[0] - out[0] * along[2];
         up[2] = out[0] * along[1] - out[1] * along[0];
+        turnToHand();
         placed = true;
+    }
+
+    /**
+     * Turns the picture a quarter turn to read across the wrist.
+     */
+    private void turnToHand()
+    {
+        for (int axis = 0; axis < 3; axis++)
+        {
+            double along = right[axis];
+            right[axis] = -up[axis];
+            up[axis] = along;
+        }
     }
 
     /** @return Whether the plate is placed on a tracked wrist. */

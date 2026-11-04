@@ -323,12 +323,13 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
         headProjection = new EyeProjection(head, right, down, forward);
         double bodyScale = ownBody.unitsPerMetre() / unitsPerMetre;
         ownBody.look(config.heldItems(), config.heldItemPercent(), config.fadeNearEyes(), config.hideOwnHead());
+        // Place the wrist plate from the last drawn body before the body updates
+        wrist.place(controllers.aim(Controllers.LEFT), rawHead(), seconds);
+        rideWrist();
         ownBody.frame(centre.yaw(), head, trackedHand(Controllers.RIGHT, head, bodyScale), trackedHand(Controllers.LEFT, head, bodyScale), seconds);
         frameBodyScale = bodyScale;
         cameraDriver.face(client, placement.getCentre().yaw(), System.currentTimeMillis());
         pointerMet = probe.hit(pointerHit);
-        wrist.place(controllers.aim(Controllers.LEFT), rawHead(), seconds);
-        rideWrist();
         pointer.update(controllers, placement.getRoom(), placement.getLift(), pointerMet ? pointerHit : null, layers.getPanel(), layers.getPicture(), layers.getOwnPanels(), wrist);
         probe.aim(pointer.view());
         placed = true;
