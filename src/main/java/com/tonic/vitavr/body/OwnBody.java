@@ -104,6 +104,7 @@ public final class OwnBody
         this.rightHand = rightHand;
         this.leftHand = leftHand;
         this.seconds = seconds;
+        leftWrist = null;
     }
 
     /**

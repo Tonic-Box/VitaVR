@@ -83,7 +83,6 @@ import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
-import java.util.HashSet;
 import java.util.Set;
 import java.util.function.Consumer;
 
@@ -192,8 +191,9 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
     private Recording recording;
     private boolean recordingTried;
     private int ceilingsFrom = NO_CEILINGS;
-    private final Set<String> wristCuts = new HashSet<>();
     private boolean recordingDue;
+    private long lastPacedNanos;
+    private double frameBodyScale = 1;
     private boolean spectating;
     private float[] spectatorMatrix;
     /** The finished recording, or null if none was made. */
@@ -311,6 +311,8 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
         frameBegun = true;
         eyesDrawn = false;
         placed = false;
+        recordingDue = false;
+        spectating = false;
         if (!frameDrawn)
         {
             return;
@@ -390,7 +392,7 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
         double bodyScale = bodyEyeHeight / STANDING_EYE_METRES / unitsPerMetre;
         ownBody.look(config.heldItems(), config.heldItemPercent(), config.fadeNearEyes(), config.hideOwnHead());
         ownBody.frame(centre.yaw(), head, trackedHand(Controllers.RIGHT, head, bodyScale), trackedHand(Controllers.LEFT, head, bodyScale), seconds);
-        paceRecording(bodyScale, seconds);
+        frameBodyScale = bodyScale;
         cameraDriver.face(client, placement.getCentre().yaw(), System.currentTimeMillis());
         pointerMet = probe.hit(pointerHit);
         wrist.place(controllers.aim(Controllers.LEFT), rawHead(), seconds);
@@ -1073,27 +1075,13 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
         {
             return;
         }
-        int[] pixels = wrist.paint(picture.getPixels(), picture.getWidth(), picture.getHeight(), this::wristBox, LocalTime.now());
+        int[] pixels = wrist.paint(picture.getPixels(), picture.getWidth(), picture.getHeight(), this::canvasBox, LocalTime.now());
         int[] onWrist = pointer.getWristCursor();
         if (onWrist != null)
         {
             cursor.paint(pixels, WristPicture.WIDTH, WristPicture.HEIGHT, onWrist[0], onWrist[1]);
         }
         wristPicture.upload(pixels);
-    }
-
-    /**
-     * Gets where a wrist component was drawn, logging each new place.
-     */
-    private int[] wristBox(int component)
-    {
-        int[] box = canvasBox(component);
-        String place = (component >>> 16) + ":" + (component & 0xFFFF) + " " + (box == null ? "none" : Arrays.toString(box));
-        if (box != null && wristCuts.add(place))
-        {
-            Logger.info("[VitaVR] Wrist cuts " + place);
-        }
-        return box;
     }
 
     /**
@@ -1171,11 +1159,15 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
     }
 
     /**
-     * Notes whether a picture is taken this frame, and keeps a steadied camera following the head.
+     * Notes whether a picture is taken this frame, and keeps a steadied camera following the head. Called only on frames
+     * the scene is drawn.
      */
-    private void paceRecording(double bodyScale, double seconds)
+    private void paceRecording()
     {
-        recordingDue = recording != null && recording.due(System.nanoTime());
+        long now = System.nanoTime();
+        double seconds = lastPacedNanos == 0 ? 0 : (now - lastPacedNanos) / 1e9;
+        lastPacedNanos = now;
+        recordingDue = recording != null && recording.due(now);
         spectating = false;
         if (recording == null || !recording.isSteadied())
         {
@@ -1185,7 +1177,7 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
         head = new Pose(head.x(), head.y() + placement.getLift(), head.z(), head.qx(), head.qy(), head.qz(), head.qw());
         if (!tabletop)
         {
-            head = clearedHead(head, config.headClearanceCm() / 100.0 / bodyScale);
+            head = clearedHead(head, config.headClearanceCm() / 100.0 / frameBodyScale);
         }
         float[] matrix = recording.follow(head, seconds, placement.getRoom());
         if (recordingDue)
@@ -1599,6 +1591,7 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
             {
                 View centre = placement.getCentre();
                 internals.sortFrom(scene, centre.eyeX(), centre.eyeY(), centre.eyeZ(), centre.yaw(), centre.pitch());
+                paceRecording();
                 startEyes();
             });
         }
