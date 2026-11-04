@@ -43,8 +43,8 @@ final class Layers implements AutoCloseable
     private static final int INVENTORY_SIDE_PIXELS = 260;
     /** The angle one interface pixel covers at 100% size, in radians. */
     private static final double HUD_PIXEL_RADIANS = 0.00065;
-    static final int LABEL_WIDTH = 512;
-    static final int LABEL_HEIGHT = 96;
+    private static final int LABEL_WIDTH = 512;
+    private static final int LABEL_HEIGHT = 96;
     /** The furthest the label stands from the head, in metres. */
     private static final double LABEL_METRES = 1.0;
     private static final double NEARER_THAN_WORLD = 0.95;

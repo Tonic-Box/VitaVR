@@ -1,13 +1,9 @@
 package com.tonic.vitavr.xr;
 
 import com.tonic.vitavr.space.Billboard;
+import lombok.Getter;
 import org.lwjgl.openxr.XR10;
 import org.lwjgl.openxr.XrCompositionLayerQuad;
-import org.lwjgl.opengl.GL11;
-import org.lwjgl.opengl.GL12;
-import org.lwjgl.system.MemoryUtil;
-
-import java.nio.IntBuffer;
 
 /**
  * A fixed-size picture shown as its own quad layer, placed by a billboard.
@@ -17,8 +13,9 @@ public final class FloatingLayer implements AutoCloseable
 {
     private final Images images;
     private final XrCompositionLayerQuad layer;
-    private final IntBuffer flipped;
+    @Getter
     private final int width;
+    @Getter
     private final int height;
     private boolean cleared;
     private boolean closed;
@@ -35,7 +32,6 @@ public final class FloatingLayer implements AutoCloseable
         this.images = Images.create(headset.getSession(), width, height);
         this.width = width;
         this.height = height;
-        this.flipped = MemoryUtil.memAllocInt(width * height);
         this.layer = XrCompositionLayerQuad.calloc().type$Default()
                 .layerFlags(XR10.XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT)
                 .space(headset.getRoom())
@@ -57,11 +53,7 @@ public final class FloatingLayer implements AutoCloseable
         {
             return;
         }
-        for (int i = 0; i < width * height; i++)
-        {
-            flipped.put(i, 0);
-        }
-        send();
+        images.clear();
         cleared = true;
     }
 
@@ -72,24 +64,16 @@ public final class FloatingLayer implements AutoCloseable
      */
     public void upload(int[] pixels)
     {
-        for (int row = 0; row < height; row++)
-        {
-            flipped.position((height - 1 - row) * width);
-            flipped.put(pixels, row * width, width);
-        }
-        flipped.clear();
-        send();
+        images.upload(pixels);
         cleared = false;
     }
 
-    private void send()
+    /**
+     * @return A texture with the layer's last picture, right way up.
+     */
+    public int getPicture()
     {
-        images.acquire();
-        int bound = GL11.glGetInteger(GL11.GL_TEXTURE_BINDING_2D);
-        GL11.glBindTexture(GL11.GL_TEXTURE_2D, images.acquiredTexture());
-        GL11.glTexSubImage2D(GL11.GL_TEXTURE_2D, 0, 0, 0, width, height, GL12.GL_BGRA, GL12.GL_UNSIGNED_INT_8_8_8_8_REV, flipped);
-        GL11.glBindTexture(GL11.GL_TEXTURE_2D, bound);
-        images.release();
+        return images.getPicture();
     }
 
     /**
@@ -135,6 +119,5 @@ public final class FloatingLayer implements AutoCloseable
         closed = true;
         images.close();
         layer.free();
-        MemoryUtil.memFree(flipped);
     }
 }

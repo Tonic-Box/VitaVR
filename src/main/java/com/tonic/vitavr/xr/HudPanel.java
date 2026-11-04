@@ -11,11 +11,7 @@ import org.lwjgl.openxr.XrCompositionLayerQuad;
 import org.lwjgl.openxr.XrSession;
 import org.lwjgl.openxr.XrSpace;
 import org.lwjgl.openxr.XrSwapchainSubImage;
-import org.lwjgl.opengl.GL11;
-import org.lwjgl.opengl.GL12;
-import org.lwjgl.system.MemoryUtil;
 
-import java.nio.IntBuffer;
 import java.util.Arrays;
 
 /**
@@ -42,7 +38,6 @@ public final class HudPanel implements AutoCloseable
     private final HudShape shape;
     private final XrCompositionLayerCylinderKHR[] arcs;
     private final XrCompositionLayerQuad[] chords;
-    private final IntBuffer flipped;
     @Getter
     private final int pixelWidth;
     @Getter
@@ -70,7 +65,6 @@ public final class HudPanel implements AutoCloseable
         this.images = Images.create(session, width, height);
         this.pixelWidth = width;
         this.pixelHeight = height;
-        this.flipped = MemoryUtil.memAllocInt(width * height);
         this.shape = new HudShape(width, height, leftPixels, rightPixels, curved);
         this.arcs = curved ? new XrCompositionLayerCylinderKHR[HudShape.COLUMNS] : null;
         this.chords = curved ? null : new XrCompositionLayerQuad[HudShape.COLUMNS];
@@ -189,34 +183,22 @@ public final class HudPanel implements AutoCloseable
             return;
         }
         recut(pixels);
-        for (int row = 0; row < pixelHeight; row++)
-        {
-            flipped.position((pixelHeight - 1 - row) * pixelWidth);
-            flipped.put(pixels, row * pixelWidth, pixelWidth);
-        }
-        flipped.clear();
-        send();
+        images.upload(pixels);
         cleared = false;
     }
 
     private void clearPicture()
     {
-        for (int i = 0; i < pixelWidth * pixelHeight; i++)
-        {
-            flipped.put(i, 0);
-        }
-        send();
+        images.clear();
         cleared = true;
     }
 
-    private void send()
+    /**
+     * @return A texture with the panel's last picture, right way up.
+     */
+    public int getPicture()
     {
-        images.acquire();
-        int bound = GL11.glGetInteger(GL11.GL_TEXTURE_BINDING_2D);
-        GL11.glBindTexture(GL11.GL_TEXTURE_2D, images.acquiredTexture());
-        GL11.glTexSubImage2D(GL11.GL_TEXTURE_2D, 0, 0, 0, pixelWidth, pixelHeight, GL12.GL_BGRA, GL12.GL_UNSIGNED_INT_8_8_8_8_REV, flipped);
-        GL11.glBindTexture(GL11.GL_TEXTURE_2D, bound);
-        images.release();
+        return images.getPicture();
     }
 
     /**
@@ -381,6 +363,5 @@ public final class HudPanel implements AutoCloseable
                 chords[column].free();
             }
         }
-        MemoryUtil.memFree(flipped);
     }
 }

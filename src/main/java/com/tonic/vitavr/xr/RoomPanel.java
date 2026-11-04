@@ -124,6 +124,14 @@ public final class RoomPanel implements AutoCloseable
     }
 
     /**
+     * @return A texture with the panel's last picture, right way up.
+     */
+    public int getPicture()
+    {
+        return layer.getPicture();
+    }
+
+    /**
      * @return The layer's address, for the frame's layer list.
      */
     public long address()

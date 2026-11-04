@@ -13,6 +13,7 @@ import org.lwjgl.openxr.XrSwapchainImageOpenGLKHR;
 import org.lwjgl.openxr.XrSwapchainImageReleaseInfo;
 import org.lwjgl.openxr.XrSwapchainImageWaitInfo;
 import org.lwjgl.opengl.GL11;
+import org.lwjgl.opengl.GL12;
 import org.lwjgl.opengl.GL21;
 import org.lwjgl.opengl.GL30;
 import org.lwjgl.system.MemoryStack;
@@ -37,6 +38,8 @@ public final class Images implements AutoCloseable
     private final int[] textures;
     private final int[] framebuffers;
     private int acquired = -1;
+    private int picture;
+    private int pictureFramebuffer;
     private boolean closed;
 
     private Images(XrSwapchain swapchain, XrInstance instance, int width, int height, int[] textures)
@@ -122,6 +125,108 @@ public final class Images implements AutoCloseable
     }
 
     /**
+     * Shows a picture, flipped into the next image on the card.
+     *
+     * @param pixels The picture, ARGB, rows from the top.
+     */
+    public void upload(int[] pixels)
+    {
+        readyPicture();
+        int bound = GL11.glGetInteger(GL11.GL_TEXTURE_BINDING_2D);
+        GL11.glBindTexture(GL11.GL_TEXTURE_2D, picture);
+        GL11.glTexSubImage2D(GL11.GL_TEXTURE_2D, 0, 0, 0, width, height, GL12.GL_BGRA, GL12.GL_UNSIGNED_INT_8_8_8_8_REV, pixels);
+        GL11.glBindTexture(GL11.GL_TEXTURE_2D, bound);
+        show(false);
+    }
+
+    /**
+     * Clears the picture and the next image.
+     */
+    public void clear()
+    {
+        readyPicture();
+        show(true);
+    }
+
+    /**
+     * @return The texture with the last picture, right way up, or 0 before one was shown.
+     */
+    public int getPicture()
+    {
+        return picture;
+    }
+
+    private void readyPicture()
+    {
+        if (picture != 0)
+        {
+            return;
+        }
+        int bound = GL11.glGetInteger(GL11.GL_TEXTURE_BINDING_2D);
+        picture = GL11.glGenTextures();
+        GL11.glBindTexture(GL11.GL_TEXTURE_2D, picture);
+        GL11.glTexImage2D(GL11.GL_TEXTURE_2D, 0, GL11.GL_RGBA8, width, height, 0, GL12.GL_BGRA, GL12.GL_UNSIGNED_INT_8_8_8_8_REV, (IntBuffer) null);
+        GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER, GL11.GL_LINEAR);
+        GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MAG_FILTER, GL11.GL_LINEAR);
+        GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_S, GL12.GL_CLAMP_TO_EDGE);
+        GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_T, GL12.GL_CLAMP_TO_EDGE);
+        GL11.glBindTexture(GL11.GL_TEXTURE_2D, bound);
+        int drawn = GL11.glGetInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
+        pictureFramebuffer = GL30.glGenFramebuffers();
+        GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, pictureFramebuffer);
+        GL30.glFramebufferTexture2D(GL30.GL_DRAW_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT0, GL11.GL_TEXTURE_2D, picture, 0);
+        GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, drawn);
+    }
+
+    /**
+     * Flips the picture into the next image, or clears both, with scissor and sRGB conversion off.
+     */
+    private void show(boolean cleared)
+    {
+        int read = GL11.glGetInteger(GL30.GL_READ_FRAMEBUFFER_BINDING);
+        int drawn = GL11.glGetInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
+        boolean scissor = GL11.glIsEnabled(GL11.GL_SCISSOR_TEST);
+        boolean srgb = GL11.glIsEnabled(GL30.GL_FRAMEBUFFER_SRGB);
+        GL11.glDisable(GL11.GL_SCISSOR_TEST);
+        GL11.glDisable(GL30.GL_FRAMEBUFFER_SRGB);
+        try
+        {
+            int image = acquire();
+            if (cleared)
+            {
+                float[] clearColour = new float[4];
+                GL11.glGetFloatv(GL11.GL_COLOR_CLEAR_VALUE, clearColour);
+                GL11.glClearColor(0, 0, 0, 0);
+                GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, pictureFramebuffer);
+                GL11.glClear(GL11.GL_COLOR_BUFFER_BIT);
+                GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, image);
+                GL11.glClear(GL11.GL_COLOR_BUFFER_BIT);
+                GL11.glClearColor(clearColour[0], clearColour[1], clearColour[2], clearColour[3]);
+            }
+            else
+            {
+                GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, pictureFramebuffer);
+                GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, image);
+                GL30.glBlitFramebuffer(0, 0, width, height, 0, height, width, 0, GL11.GL_COLOR_BUFFER_BIT, GL11.GL_NEAREST);
+            }
+        }
+        finally
+        {
+            release();
+            GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, read);
+            GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, drawn);
+            if (scissor)
+            {
+                GL11.glEnable(GL11.GL_SCISSOR_TEST);
+            }
+            if (srgb)
+            {
+                GL11.glEnable(GL30.GL_FRAMEBUFFER_SRGB);
+            }
+        }
+    }
+
+    /**
      * Acquires the next image, waiting until the runtime is done with it.
      *
      * @return The acquired image's framebuffer.
@@ -186,6 +291,11 @@ public final class Images implements AutoCloseable
         for (int framebuffer : framebuffers)
         {
             GL30.glDeleteFramebuffers(framebuffer);
+        }
+        if (picture != 0)
+        {
+            GL30.glDeleteFramebuffers(pictureFramebuffer);
+            GL11.glDeleteTextures(picture);
         }
         XR10.xrDestroySwapchain(swapchain);
     }
