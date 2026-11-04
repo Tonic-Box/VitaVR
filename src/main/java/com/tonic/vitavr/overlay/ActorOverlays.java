@@ -267,26 +267,36 @@ public final class ActorOverlays
     }
 
     /**
-     * Gets the corners of an upright cell, sized to a fixed angle from the eye.
-     *
-     * @param cell    The cell.
-     * @param eye     The eye position.
-     * @param acrossX The level across direction's x.
-     * @param acrossZ The level across direction's z.
-     * @return The top left, top right, bottom right and bottom left corners.
+     * Gets an upright cell's corners, sized to a fixed angle from the eye.
+     * @param cell The cell.
+     * @param eye The eye position.
+     * @param acrossX The x of the level direction across.
+     * @param acrossZ The z of the level direction across.
+     * @param out Receives the corners.
+     * @return The out array: top left, top right, bottom right and bottom left as x, y, z.
      */
-    public static double[][] corners(Cell cell, double[] eye, double acrossX, double acrossZ)
+    public static double[][] corners(Cell cell, double[] eye, double acrossX, double acrossZ, double[][] out)
     {
-        double pixel = Math.max(1, distance(new double[]{cell.x, cell.y, cell.z}, eye)) * PIXEL_RADIANS;
+        double dx = cell.x - eye[0];
+        double dy = cell.y - eye[1];
+        double dz = cell.z - eye[2];
+        double pixel = Math.max(1, Math.sqrt(dx * dx + dy * dy + dz * dz)) * PIXEL_RADIANS;
         double left = -cell.anchorX * pixel;
         double right = (cell.width - cell.anchorX) * pixel;
         double top = -cell.anchorY * pixel;
         double bottom = (cell.height - cell.anchorY) * pixel;
-        return new double[][]{
-                {cell.x + acrossX * left, cell.y + top, cell.z + acrossZ * left},
-                {cell.x + acrossX * right, cell.y + top, cell.z + acrossZ * right},
-                {cell.x + acrossX * right, cell.y + bottom, cell.z + acrossZ * right},
-                {cell.x + acrossX * left, cell.y + bottom, cell.z + acrossZ * left}};
+        corner(out[0], cell.x + acrossX * left, cell.y + top, cell.z + acrossZ * left);
+        corner(out[1], cell.x + acrossX * right, cell.y + top, cell.z + acrossZ * right);
+        corner(out[2], cell.x + acrossX * right, cell.y + bottom, cell.z + acrossZ * right);
+        corner(out[3], cell.x + acrossX * left, cell.y + bottom, cell.z + acrossZ * left);
+        return out;
+    }
+
+    private static void corner(double[] out, double x, double y, double z)
+    {
+        out[0] = x;
+        out[1] = y;
+        out[2] = z;
     }
 
     /**

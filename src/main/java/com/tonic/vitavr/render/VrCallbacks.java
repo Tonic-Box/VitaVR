@@ -55,6 +55,7 @@ import org.lwjgl.opengl.WGL;
 import org.lwjgl.system.MemoryStack;
 
 import java.nio.file.Path;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Set;
 import java.util.function.Consumer;
@@ -140,6 +141,22 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
     private long sceneFrom;
     private AtlasQuad atlas;
     private final double[] pointerHit = new double[3];
+    private final ZoneDraw zoneDraw = new ZoneDraw();
+    private final AlphaDraw alphaDraw = new AlphaDraw();
+    private final double[] aimForward = new double[3];
+    private final double[] beamFrom = new double[3];
+    private final double[] beamTo = new double[3];
+    private final double[] crossAt = new double[3];
+    private final double[] handPoint = new double[3];
+    private final double[] viewRight = new double[3];
+    private final double[] viewEye = new double[3];
+    private final double[][] cellCorners = new double[4][3];
+    private final double[][] wristCorners = new double[4][3];
+    private final double[] outlineFrom = new double[3];
+    private final double[] outlineTo = new double[3];
+    private double[] outlines = new double[0];
+    private int[] outlineColours = new int[0];
+    private int outlineCount;
     private boolean pointerMet;
     private int sceneFramebuffer;
     private int worldProjProgram;
@@ -493,6 +510,70 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
     }
 
     /**
+     * A reusable opaque zone draw, run once per view.
+     */
+    private final class ZoneDraw implements Runnable
+    {
+        private final Runnable once = this::once;
+        private Projection projection;
+        private Scene scene;
+        private int zoneX;
+        private int zoneZ;
+        private boolean nearPointer;
+
+        private void set(Projection projection, Scene scene, int zoneX, int zoneZ, boolean nearPointer)
+        {
+            this.projection = projection;
+            this.scene = scene;
+            this.zoneX = zoneX;
+            this.zoneZ = zoneZ;
+            this.nearPointer = nearPointer;
+        }
+
+        @Override
+        public void run()
+        {
+            forEachView(once, nearPointer);
+        }
+
+        private void once()
+        {
+            gpu.drawZoneOpaque(projection, scene, zoneX, zoneZ);
+        }
+    }
+
+    /**
+     * A reusable alpha zone draw for the right eye and steadied camera, after the GPU plugin drew the left.
+     */
+    private final class AlphaDraw implements Runnable
+    {
+        private Scene scene;
+        private int level;
+        private int zoneX;
+        private int zoneZ;
+
+        private void set(Scene scene, int level, int zoneX, int zoneZ)
+        {
+            this.scene = scene;
+            this.level = level;
+            this.zoneX = zoneX;
+            this.zoneZ = zoneZ;
+        }
+
+        @Override
+        public void run()
+        {
+            useEye(1);
+            internals.drawZoneAlphaAgain(scene, level, zoneX, zoneZ);
+            if (recording.isSpectating())
+            {
+                useSpectator();
+                internals.drawZoneAlphaAgain(scene, level, zoneX, zoneZ);
+            }
+        }
+    }
+
+    /**
      * Runs a GPU plugin draw once for each eye.
      */
     private void forEachEye(Runnable draw)
@@ -543,7 +624,7 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
         {
             return true;
         }
-        double[] forward = new double[3];
+        double[] forward = aimForward;
         aimed.forward(forward);
         double level = Math.hypot(forward[0], forward[2]);
         double dx = GpuInternals.zoneEdge(zoneX) + GpuInternals.ZONE_UNITS / 2.0 - aimed.eyeX();
@@ -563,8 +644,8 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
      */
     private void drawPointers(View view, float[] matrix)
     {
-        double[] from = new double[3];
-        double[] to = new double[3];
+        double[] from = beamFrom;
+        double[] to = beamTo;
         for (int hand = Controllers.LEFT; hand <= Controllers.RIGHT; hand++)
         {
             if (!pointer.beam(controllers, hand, placement.getRoom(), placement.getLift(), from, to))
@@ -580,7 +661,6 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
             markers.draw(view, matrix, pointerHit, DOT_EDGE_RADIANS, Markers.DOT, DOT_EDGE);
             markers.draw(view, matrix, pointerHit, DOT_RADIANS, Markers.DOT, DOT);
         }
-        double[] crossAt = new double[3];
         int cross = pointer.cross(crossAt);
         double scale = pointer.crossScale();
         if (cross != 0 && scale > 0)
@@ -618,13 +698,32 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
      */
     private void drawTiles(float[] matrix)
     {
+        for (int segment = 0; segment < outlineCount; segment++)
+        {
+            int at = segment * 6;
+            outlineFrom[0] = outlines[at];
+            outlineFrom[1] = outlines[at + 1];
+            outlineFrom[2] = outlines[at + 2];
+            outlineTo[0] = outlines[at + 3];
+            outlineTo[1] = outlines[at + 4];
+            outlineTo[2] = outlines[at + 5];
+            beams.draw(matrix, outlineFrom, outlineTo, outlineColours[segment]);
+        }
+    }
+
+    /**
+     * Builds the frame's tile outlines for the hovered, own and destination tiles.
+     */
+    private void prepareTiles()
+    {
+        outlineCount = 0;
         int plane = client.getTopLevelWorldView().getPlane();
         if (config.outlineHoveredTile() && pointer.isOnWorld())
         {
             Tile hovered = client.getSelectedSceneTile();
             if (hovered != null)
             {
-                outline(matrix, hovered.getLocalLocation(), plane, HOVERED_TILE);
+                outline(hovered.getLocalLocation(), plane, HOVERED_TILE);
             }
         }
         Player player = client.getLocalPlayer();
@@ -633,19 +732,19 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
             LocalPoint at = player.getLocalLocation();
             if (at != null && at.getWorldView() == WorldView.TOPLEVEL)
             {
-                outline(matrix, new LocalPoint(at.getX() & ~127 | 64, at.getY() & ~127 | 64, client.getTopLevelWorldView()), plane, OWN_TILE);
+                outline(new LocalPoint(at.getX() & ~127 | 64, at.getY() & ~127 | 64, client.getTopLevelWorldView()), plane, OWN_TILE);
             }
         }
         if (config.outlineDestinationTile())
         {
-            outline(matrix, client.getLocalDestinationLocation(), plane, DESTINATION_TILE);
+            outline(client.getLocalDestinationLocation(), plane, DESTINATION_TILE);
         }
     }
 
     /**
-     * Draws a tile's outline along the ground.
+     * Adds a tile outline, each edge split so it follows the slope.
      */
-    private void outline(float[] matrix, LocalPoint centre, int plane, int rgba)
+    private void outline(LocalPoint centre, int plane, int rgba)
     {
         if (centre == null || !centre.isInScene())
         {
@@ -655,17 +754,24 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
         int bottom = centre.getY() & ~127;
         int[][] corners = {{left, bottom}, {left + 128, bottom}, {left + 128, bottom + 128}, {left, bottom + 128}};
         int colour = (rgba >> 16 & 0xFF) << 24 | (rgba >> 8 & 0xFF) << 16 | (rgba & 0xFF) << 8 | rgba >>> 24;
-        double[] from = new double[3];
-        double[] to = new double[3];
+        int wanted = (outlineCount + 4 * OUTLINE_STEPS) * 6;
+        if (outlines.length < wanted)
+        {
+            outlines = Arrays.copyOf(outlines, wanted * 2);
+            outlineColours = Arrays.copyOf(outlineColours, wanted * 2 / 6);
+        }
         for (int edge = 0; edge < 4; edge++)
         {
             int[] a = corners[edge];
             int[] b = corners[(edge + 1) % 4];
             for (int step = 0; step < OUTLINE_STEPS; step++)
             {
-                ground(a[0] + (b[0] - a[0]) * step / OUTLINE_STEPS, a[1] + (b[1] - a[1]) * step / OUTLINE_STEPS, plane, from);
-                ground(a[0] + (b[0] - a[0]) * (step + 1) / OUTLINE_STEPS, a[1] + (b[1] - a[1]) * (step + 1) / OUTLINE_STEPS, plane, to);
-                beams.draw(matrix, from, to, colour);
+                ground(a[0] + (b[0] - a[0]) * step / OUTLINE_STEPS, a[1] + (b[1] - a[1]) * step / OUTLINE_STEPS, plane, outlineFrom);
+                ground(a[0] + (b[0] - a[0]) * (step + 1) / OUTLINE_STEPS, a[1] + (b[1] - a[1]) * (step + 1) / OUTLINE_STEPS, plane, outlineTo);
+                int at = outlineCount * 6;
+                System.arraycopy(outlineFrom, 0, outlines, at, 3);
+                System.arraycopy(outlineTo, 0, outlines, at + 3, 3);
+                outlineColours[outlineCount++] = colour;
             }
         }
     }
@@ -690,8 +796,8 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
         }
         for (int hand = Controllers.LEFT; hand <= Controllers.RIGHT; hand++)
         {
-            double[] at = handAt(hand);
-            if (at == null)
+            double[] at = handPoint;
+            if (!handAt(hand, at))
             {
                 continue;
             }
@@ -701,18 +807,19 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
     }
 
     /**
-     * Gets where a controller is in the world, or null while it is not tracked.
+     * Gets a controller's world position.
+     *
+     * @return Whether it is tracked; out is set only if so.
      */
-    private double[] handAt(int hand)
+    private boolean handAt(int hand, double[] out)
     {
         Pose held = controllers.aim(hand);
         if (held == null)
         {
-            return null;
+            return false;
         }
-        double[] at = new double[3];
-        placement.toWorld(held.x(), held.y(), held.z(), at);
-        return at;
+        placement.toWorld(held.x(), held.y(), held.z(), out);
+        return true;
     }
 
     /**
@@ -721,8 +828,8 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
     private TrackedHand trackedHand(int hand, double[] head, double bodyScale)
     {
         Pose held = controllers.aim(hand);
-        double[] at = handAt(hand);
-        if (held == null || at == null)
+        double[] at = new double[3];
+        if (held == null || !handAt(hand, at))
         {
             return null;
         }
@@ -781,17 +888,19 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
      */
     private void drawOverlays(View view, float[] matrix)
     {
-        double[] right = new double[3];
+        double[] right = viewRight;
         view.right(right);
         double level = Math.hypot(right[0], right[2]);
         if (level < 1e-6)
         {
             return;
         }
-        double[] at = {view.eyeX(), view.eyeY(), view.eyeZ()};
+        viewEye[0] = view.eyeX();
+        viewEye[1] = view.eyeY();
+        viewEye[2] = view.eyeZ();
         for (ActorOverlays.Cell cell : overlays.getCells())
         {
-            atlas.draw(matrix, ActorOverlays.corners(cell, at, right[0] / level, right[2] / level), cell.getLeft(), cell.getTop(), cell.getWidth(),
+            atlas.draw(matrix, ActorOverlays.corners(cell, viewEye, right[0] / level, right[2] / level, cellCorners), cell.getLeft(), cell.getTop(), cell.getWidth(),
                     cell.getHeight(), 1);
         }
     }
@@ -801,12 +910,11 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
      */
     private void drawWrist(float[] matrix)
     {
-        double[][] corners = new double[4][3];
-        if (!wrist.corners(placement.getRoom(), placement.getLift(), corners))
+        if (!wrist.corners(placement.getRoom(), placement.getLift(), wristCorners))
         {
             return;
         }
-        layers.getWristPicture().draw(matrix, corners, 0, 0, WristPicture.WIDTH, WristPicture.HEIGHT, (float) wrist.getShown());
+        layers.getWristPicture().draw(matrix, wristCorners, 0, 0, WristPicture.WIDTH, WristPicture.HEIGHT, (float) wrist.getShown());
     }
 
     /**
@@ -889,6 +997,7 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
         state.save();
         probe.read();
         prepareOverlays();
+        prepareTiles();
         rideWrist();
         for (int eye = 0; eye < EYES; eye++)
         {
@@ -1078,9 +1187,12 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
         {
             if (!offTable(scene, zoneX, zoneZ))
             {
-                Runnable drawZone = () -> forEachView(() -> gpu.drawZoneOpaque(projection, scene, zoneX, zoneZ), nearPointer(scene, zoneX, zoneZ));
-                drawZone.run();
-                safely(() -> roofs.ceilings(scene, zoneX, zoneZ, placement.anchorX(), placement.anchorZ(), drawZone));
+                zoneDraw.set(projection, scene, zoneX, zoneZ, nearPointer(scene, zoneX, zoneZ));
+                zoneDraw.run();
+                if (roofs.hasCeilings(scene, zoneX, zoneZ, placement.anchorX(), placement.anchorZ()))
+                {
+                    safely(() -> roofs.ceilings(scene, zoneDraw));
+                }
             }
             return;
         }
@@ -1099,16 +1211,8 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
             // Plugin call for the left eye, since its zone sorting must run only once
             useEye(0);
             gpu.drawZoneAlpha(projection, scene, level, zoneX, zoneZ);
-            safely(() ->
-            {
-                useEye(1);
-                internals.drawZoneAlphaAgain(scene, level, zoneX, zoneZ);
-                if (recording.isSpectating())
-                {
-                    useSpectator();
-                    internals.drawZoneAlphaAgain(scene, level, zoneX, zoneZ);
-                }
-            });
+            alphaDraw.set(scene, level, zoneX, zoneZ);
+            safely(alphaDraw);
             return;
         }
         gpu.drawZoneAlpha(projection, scene, level, zoneX, zoneZ);

@@ -59,22 +59,29 @@ final class Roofs
     }
 
     /**
-     * Draws a zone's ceilings when it is a top level zone near the player.
+     * Gets whether a zone gets ceilings this frame.
      *
-     * @param scene    The scene the zone is in.
-     * @param zoneX    The zone's x.
-     * @param zoneZ    The zone's z.
-     * @param playerX  The player's x.
-     * @param playerZ  The player's z.
+     * @param scene The scene the zone is in.
+     * @param zoneX The zone x.
+     * @param zoneZ The zone z.
+     * @param playerX The player position, across.
+     * @param playerZ The player position, along.
+     * @return Whether its ceilings are drawn.
+     */
+    boolean hasCeilings(Scene scene, int zoneX, int zoneZ, double playerX, double playerZ)
+    {
+        return ceilingsFrom != NO_CEILINGS && scene.getWorldViewId() == WorldView.TOPLEVEL && Math.abs(zoneX - GpuInternals.zoneOf(playerX)) <= CEILING_ZONES
+                && Math.abs(zoneZ - GpuInternals.zoneOf(playerZ)) <= CEILING_ZONES;
+    }
+
+    /**
+     * Draws a zone's ceilings by redrawing the levels above the player with front faces culled and colour dimmed.
+     *
+     * @param scene The scene the zone is in.
      * @param drawZone Draws the zone into every view.
      */
-    void ceilings(Scene scene, int zoneX, int zoneZ, double playerX, double playerZ, Runnable drawZone)
+    void ceilings(Scene scene, Runnable drawZone)
     {
-        if (ceilingsFrom == NO_CEILINGS || scene.getWorldViewId() != WorldView.TOPLEVEL
-                || Math.abs(zoneX - GpuInternals.zoneOf(playerX)) > CEILING_ZONES || Math.abs(zoneZ - GpuInternals.zoneOf(playerZ)) > CEILING_ZONES)
-        {
-            return;
-        }
         float light = config.ceilingLightPercent() / 100f;
         internals.levels(scene, ceilingsFrom, TOP_LEVEL);
         GL11.glCullFace(GL11.GL_FRONT);

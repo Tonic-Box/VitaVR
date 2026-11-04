@@ -18,6 +18,8 @@ public final class WristPlate
     private final double[] right = new double[3];
     private final double[] up = new double[3];
     private final double[] normal = new double[3];
+    private final double[] direction = new double[3];
+    private final double[] hit = new double[3];
     private boolean placed;
 
     /**
@@ -120,8 +122,8 @@ public final class WristPlate
      */
     public int[] crossing(Pose aim)
     {
-        double[] hit = hit(aim);
-        return hit == null ? null : new int[] {(int) hit[1], (int) hit[2]};
+        double[] met = hit(aim);
+        return met == null ? null : new int[] {(int) met[1], (int) met[2]};
     }
 
     /**
@@ -131,8 +133,8 @@ public final class WristPlate
      */
     public double reach(Pose aim)
     {
-        double[] hit = hit(aim);
-        return hit == null ? Double.POSITIVE_INFINITY : hit[0];
+        double[] met = hit(aim);
+        return met == null ? Double.POSITIVE_INFINITY : met[0];
     }
 
     private double[] hit(Pose aim)
@@ -141,7 +143,6 @@ public final class WristPlate
         {
             return null;
         }
-        double[] direction = new double[3];
         aim.rotate(0, 0, -1, direction);
         double facing = direction[0] * normal[0] + direction[1] * normal[1] + direction[2] * normal[2];
         if (facing >= -1e-6)
@@ -162,7 +163,10 @@ public final class WristPlate
         {
             return null;
         }
-        return new double[] {t, Math.floor(px), Math.floor(py)};
+        hit[0] = t;
+        hit[1] = Math.floor(px);
+        hit[2] = Math.floor(py);
+        return hit;
     }
 
     /**
