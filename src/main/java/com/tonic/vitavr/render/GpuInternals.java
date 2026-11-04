@@ -26,6 +26,10 @@ final class GpuInternals
 {
     private static final int SCENE_OFFSET = (Constants.EXTENDED_SCENE_SIZE - Constants.SCENE_SIZE) / 2;
     private static final int ALPHA_ZSORT_CLOSE = 2048;
+    /** The offset of the scene's own zones into the extended scene, in zones. */
+    static final int ZONE_OFFSET = SCENE_OFFSET >> 3;
+    /** The width of a zone, in game units. */
+    static final int ZONE_UNITS = 1024;
 
     private final Object gpu;
     private final Field renderThreads;
@@ -116,6 +120,28 @@ final class GpuInternals
                 | DrawCallbacks.ZBUF
                 | DrawCallbacks.RENDER_THREADS(threads)
                 | (allZones ? DrawCallbacks.ZBUF_ZONE_FRUSTUM_CHECK : 0);
+    }
+
+    /**
+     * Gets the west or south edge of a zone.
+     *
+     * @param zone The zone index in the extended scene.
+     * @return The edge, in game units.
+     */
+    static double zoneEdge(int zone)
+    {
+        return (zone - ZONE_OFFSET) * (double) ZONE_UNITS;
+    }
+
+    /**
+     * Gets the zone a scene coordinate lies in.
+     *
+     * @param at The coordinate, in game units.
+     * @return The zone index in the extended scene.
+     */
+    static int zoneOf(double at)
+    {
+        return (int) Math.floor(at / ZONE_UNITS) + ZONE_OFFSET;
     }
 
     /**

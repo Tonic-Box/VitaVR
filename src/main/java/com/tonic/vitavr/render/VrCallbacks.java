@@ -5,14 +5,7 @@ import com.tonic.vitavr.VitaVRConfig;
 import com.tonic.vitavr.body.OwnBody;
 import com.tonic.vitavr.body.TrackedHand;
 import com.tonic.vitavr.config.ViewMode;
-import com.tonic.vitavr.hud.CursorDot;
 import com.tonic.vitavr.hud.CanvasKeys;
-import com.tonic.vitavr.hud.HudPicture;
-import com.tonic.vitavr.panels.AbstractPanel;
-import com.tonic.vitavr.panels.KeyboardPanel;
-import com.tonic.vitavr.panels.SettingsPanel;
-import com.tonic.vitavr.hud.PointerLabel;
-import com.tonic.vitavr.space.Billboard;
 import com.tonic.vitavr.feel.Haptics;
 import com.tonic.vitavr.overlay.ActorOverlays;
 import com.tonic.vitavr.space.ComfortMotion;
@@ -22,22 +15,15 @@ import com.tonic.vitavr.wrist.WristDisplay;
 import com.tonic.vitavr.wrist.WristPicture;
 import com.tonic.vitavr.pointer.CameraDriver;
 import com.tonic.vitavr.pointer.Pointer;
-import com.tonic.vitavr.pointer.WorldMenu;
 import com.tonic.vitavr.space.Pose;
 import com.tonic.vitavr.space.RoomToWorld;
 import com.tonic.vitavr.space.Placement;
 import com.tonic.vitavr.space.View;
 import com.tonic.vitavr.xr.Controllers;
 import com.tonic.vitavr.xr.EyeLayer;
-import com.tonic.vitavr.xr.FloatingLayer;
-import com.tonic.vitavr.xr.HudPanel;
-import com.tonic.vitavr.xr.RoomPanel;
 import com.tonic.vitavr.xr.Headset;
 import lombok.Getter;
-import net.runelite.client.RuneLite;
-import net.runelite.api.BufferProvider;
 import net.runelite.api.Client;
-import net.runelite.api.Constants;
 import net.runelite.api.Actor;
 import net.runelite.api.GameObject;
 import net.runelite.api.Hitsplat;
@@ -57,15 +43,10 @@ import net.runelite.api.WorldEntity;
 import net.runelite.api.WorldView;
 import net.runelite.api.coords.LocalPoint;
 import net.runelite.api.hooks.DrawCallbacks;
-import net.runelite.api.gameval.InterfaceID;
-import net.runelite.api.gameval.VarClientID;
-import net.runelite.api.gameval.VarbitID;
-import net.runelite.api.widgets.Widget;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.plugins.gpu.GpuPluginConfig;
 import org.lwjgl.PointerBuffer;
 import org.lwjgl.opengl.GL11;
-import org.lwjgl.opengl.GL14;
 import org.lwjgl.opengl.GL15;
 import org.lwjgl.opengl.GL20;
 import org.lwjgl.opengl.GL30;
@@ -73,16 +54,8 @@ import org.lwjgl.opengl.GL31;
 import org.lwjgl.opengl.WGL;
 import org.lwjgl.system.MemoryStack;
 
-import java.awt.Rectangle;
-import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.LocalDateTime;
-import java.time.LocalTime;
-import java.time.format.DateTimeFormatter;
-import java.util.Arrays;
 import java.util.Collections;
-import java.util.List;
 import java.util.Set;
 import java.util.function.Consumer;
 
@@ -95,8 +68,6 @@ import static com.tonic.vitavr.space.Vectors.unit;
 public final class VrCallbacks implements DrawCallbacks, AutoCloseable
 {
     private static final int EYES = 2;
-    private static final int ZONE_OFFSET = (Constants.EXTENDED_SCENE_SIZE - Constants.SCENE_SIZE) / 2 >> 3;
-    private static final int ZONE_UNITS = 1024;
     /** How many tiles the table's edge fades over. */
     private static final int TABLE_FOG_TILES = 2;
     private static final int ACTIVE_BEAM = 0x40E0FFE0;
@@ -108,21 +79,6 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
     private static final double CROSS_RADIANS = Math.toRadians(1.3);
     private static final int DOT = 0xFFFFFFFF;
     private static final int DOT_EDGE = 0xC0000000;
-    /** The canvas width the chat and inventory side widths are measured against. */
-    private static final int HUD_CANVAS_WIDTH = 1760;
-    private static final int CHAT_SIDE_PIXELS = 520;
-    private static final int INVENTORY_SIDE_PIXELS = 260;
-    /** The angle one interface pixel covers at 100% size, in radians. */
-    private static final double HUD_PIXEL_RADIANS = 0.00065;
-    private static final int LABEL_WIDTH = 512;
-    private static final int LABEL_HEIGHT = 96;
-    /** The furthest the label stands from the head, in metres. */
-    private static final double LABEL_METRES = 1.0;
-    private static final double NEARER_THAN_WORLD = 0.95;
-    /** The label's offset from the pointer end, in label pixels. */
-    private static final double LABEL_RIGHT = -14;
-    private static final double LABEL_BELOW = -16;
-    private static final double LABEL_ENLARGED = 1.8;
     private static final int HOVERED_TILE = 0xFFFFFFFF;
     private static final int OWN_TILE = 0xFF00FFFF;
     private static final int DESTINATION_TILE = 0xFF00FF00;
@@ -134,12 +90,6 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
     /** How quickly the view darkens inside scenery and clears after, in seconds. */
     private static final double WALL_DARKEN_SECONDS = 0.04;
     private static final double WALL_CLEAR_SECONDS = 0.15;
-    private static final double SETTINGS_METRES = 0.85;
-    private static final double SETTINGS_BELOW_EYES = 0.12;
-    private static final double KEYBOARD_METRES = 0.6;
-    private static final double KEYBOARD_BELOW_EYES = 0.4;
-    /** How often typing input is checked for, in milliseconds. */
-    private static final long TYPING_CHECK_MILLIS = 200;
     /** How far ahead of and below the eyes the own head stack hangs in first person, in metres. */
     private static final double OWN_AHEAD_METRES = 0.7;
     private static final double OWN_BELOW_METRES = 0.3;
@@ -147,10 +97,6 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
     private static final double OWN_SPLATS_BELOW_METRES = 0.12;
     /** How near a zone centre must be to the pointer for the probe to draw it, in game units. */
     private static final double PROBE_ZONE_REACH = 1024;
-    private static final int TOP_LEVEL = 3;
-    private static final int NO_CEILINGS = -1;
-    private static final int CEILING_ZONES = 3;
-    private static final DateTimeFormatter RECORDING_STAMP = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");
 
     @Getter
     private final DrawCallbacks gpu;
@@ -179,46 +125,20 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
     private PointerProbe probe;
     private Beams beams;
     private Markers markers;
-    private FloatingLayer menuLayer;
-    private FloatingLayer labelLayer;
-    private RoomPanel settingsPanel;
-    private RoomPanel keyboardPanel;
-    private List<RoomPanel> ownPanels = Collections.emptyList();
-    private long nextTypingCheck;
-    private boolean typingWanted;
-    private boolean keyboardOpenedForTyping;
-    private final PointerLabel label = new PointerLabel(LABEL_WIDTH, LABEL_HEIGHT);
-    private final Billboard labelBoard = new Billboard();
+    private Layers layers;
     private Recording recording;
-    private boolean recordingTried;
-    private int ceilingsFrom = NO_CEILINGS;
-    private int ceilingsMinLevel;
-    private boolean recordingDue;
-    private long lastPacedNanos;
+    private Roofs roofs;
     private double frameBodyScale = 1;
-    private boolean spectating;
-    private float[] spectatorMatrix;
-    /** The finished recording, or null if none was made. */
-    @Getter
-    private Path recorded;
-    /** Why the session was not recorded, or null if nothing went wrong. */
-    @Getter
-    private String recordingProblem;
     private final ActorOverlays overlays;
     private final ComfortMotion comfort = new ComfortMotion();
     private final EyeClearance clearance;
     private final Haptics haptics;
     private ComfortShade shade;
     private final WristDisplay wrist = new WristDisplay();
-    private AtlasQuad wristPicture;
     private double wallDark;
     private final FrameTimes times = new FrameTimes(TIMES_STRETCH_NANOS);
     private long sceneFrom;
     private AtlasQuad atlas;
-    private HudPanel panel;
-    private final HudPicture picture = new HudPicture();
-    private final CursorDot cursor = new CursorDot();
-    private volatile boolean hudShapeStale = true;
     private final double[] pointerHit = new double[3];
     private boolean pointerMet;
     private int sceneFramebuffer;
@@ -313,8 +233,10 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
         frameBegun = true;
         eyesDrawn = false;
         placed = false;
-        recordingDue = false;
-        spectating = false;
+        if (recording != null)
+        {
+            recording.frameBegun();
+        }
         if (!frameDrawn)
         {
             return;
@@ -330,15 +252,7 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
             switchView();
         }
         tabletop = config.viewMode() == ViewMode.TABLETOP;
-        if (panel != null)
-        {
-            if (controllers.hudPressed())
-            {
-                panel.show(!panel.shown());
-            }
-            panel.standBefore(rawHead());
-        }
-        openPanels();
+        layers.frame(controllers, rawHead());
         placement.turn(controllers, config, seconds);
         if (tabletop && !pointer.isOnPanel() && placement.tiltTable(controllers, seconds))
         {
@@ -398,56 +312,9 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
         pointerMet = probe.hit(pointerHit);
         wrist.place(controllers.aim(Controllers.LEFT), rawHead(), seconds);
         rideWrist();
-        pointer.update(controllers, placement.getRoom(), placement.getLift(), pointerMet ? pointerHit : null, panel, picture, ownPanels, wrist);
+        pointer.update(controllers, placement.getRoom(), placement.getLift(), pointerMet ? pointerHit : null, layers.getPanel(), layers.getPicture(), layers.getOwnPanels(), wrist);
         probe.aim(pointer.view());
         placed = true;
-    }
-
-    /**
-     * Opens and closes the settings and keyboard panels; the keyboard also opens while the game wants typing.
-     */
-    private void openPanels()
-    {
-        double pixelAtOneMetre = HUD_PIXEL_RADIANS * config.hudSizePercent() / 100.0;
-        if (controllers.settingsPressed() || ((SettingsPanel) settingsPanel.getPanel()).takeCloseAsked())
-        {
-            toggle(settingsPanel, pixelAtOneMetre);
-        }
-        boolean wasWanted = typingWanted;
-        long now = System.currentTimeMillis();
-        if (now >= nextTypingCheck)
-        {
-            nextTypingCheck = now + TYPING_CHECK_MILLIS;
-            Widget input = client.getWidget(InterfaceID.Chatbox.MES_LAYER);
-            typingWanted = client.getVarcIntValue(VarClientID.MESLAYERMODE) != 0 && input != null && !input.isHidden();
-        }
-        if (controllers.keyboardPressed() || ((KeyboardPanel) keyboardPanel.getPanel()).takeHideAsked())
-        {
-            keyboardOpenedForTyping = false;
-            toggle(keyboardPanel, pixelAtOneMetre);
-        }
-        else if (typingWanted && !wasWanted && !keyboardPanel.isShown())
-        {
-            keyboardOpenedForTyping = true;
-            keyboardPanel.open(rawHead(), pixelAtOneMetre);
-        }
-        else if (!typingWanted && wasWanted && keyboardOpenedForTyping)
-        {
-            keyboardOpenedForTyping = false;
-            keyboardPanel.hide();
-        }
-    }
-
-    private void toggle(RoomPanel own, double pixelAtOneMetre)
-    {
-        if (own.isShown())
-        {
-            own.hide();
-        }
-        else
-        {
-            own.open(rawHead(), pixelAtOneMetre);
-        }
     }
 
     /**
@@ -455,12 +322,29 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
      */
     public void settingsChanged()
     {
-        hudShapeStale = true;
-        RoomPanel shown = settingsPanel;
+        Layers shown = layers;
         if (shown != null)
         {
-            ((SettingsPanel) shown.getPanel()).settingsChanged();
+            shown.settingsChanged();
         }
+    }
+
+    /**
+     * Gets the session's finished recording.
+     * @return The recording, or null if none was made.
+     */
+    public Path getRecorded()
+    {
+        return recording == null ? null : recording.getRecorded();
+    }
+
+    /**
+     * Gets why the session was not recorded.
+     * @return The reason, or null if nothing went wrong.
+     */
+    public String getRecordingProblem()
+    {
+        return recording == null ? null : recording.getProblem();
     }
 
     /**
@@ -509,24 +393,16 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
         long submitFrom = System.nanoTime();
         try (MemoryStack stack = MemoryStack.stackPush())
         {
-            PointerBuffer layers = null;
+            PointerBuffer frameLayers = null;
             if (eyesDrawn)
             {
-                // The world first, then the interfaces and the floating layers
-                long[] hud = panel == null ? new long[0] : panel.layers();
-                layers = stack.mallocPointer(5 + hud.length);
-                layers.put(eyeLayer.address());
-                for (long column : hud)
-                {
-                    layers.put(column);
-                }
-                layers.put(menuLayer.address());
-                layers.put(labelLayer.address());
-                layers.put(settingsPanel.address());
-                layers.put(keyboardPanel.address());
-                layers.flip();
+                // World layer first, then the overlay layers
+                frameLayers = stack.mallocPointer(1 + layers.count());
+                frameLayers.put(eyeLayer.address());
+                layers.put(frameLayers);
+                frameLayers.flip();
             }
-            headset.endFrame(layers);
+            headset.endFrame(frameLayers);
         }
         long done = System.nanoTime();
         times.add(FrameTimes.Part.SUBMIT, done - submitFrom);
@@ -565,7 +441,7 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
             probe.clear();
         }
         eyes.clear(client.getSkyboxColor());
-        if (spectating)
+        if (recording.isSpectating())
         {
             recording.clearSpectator(client.getSkyboxColor());
         }
@@ -609,27 +485,11 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
         {
             return false;
         }
-        double left = zoneEdge(zoneX);
-        double bottom = zoneEdge(zoneZ);
-        double dx = Math.max(0, Math.max(left - placement.anchorX(), placement.anchorX() - (left + ZONE_UNITS)));
-        double dz = Math.max(0, Math.max(bottom - placement.anchorZ(), placement.anchorZ() - (bottom + ZONE_UNITS)));
+        double left = GpuInternals.zoneEdge(zoneX);
+        double bottom = GpuInternals.zoneEdge(zoneZ);
+        double dx = Math.max(0, Math.max(left - placement.anchorX(), placement.anchorX() - (left + GpuInternals.ZONE_UNITS)));
+        double dz = Math.max(0, Math.max(bottom - placement.anchorZ(), placement.anchorZ() - (bottom + GpuInternals.ZONE_UNITS)));
         return dx * dx + dz * dz > tableReach * tableReach;
-    }
-
-    /**
-     * Gets a zone's west or south edge in the scene.
-     */
-    private static double zoneEdge(int zone)
-    {
-        return (zone - ZONE_OFFSET) * (double) ZONE_UNITS;
-    }
-
-    /**
-     * Gets the zone a scene coordinate lies in.
-     */
-    private static int zoneOf(double at)
-    {
-        return (int) Math.floor(at / ZONE_UNITS) + ZONE_OFFSET;
     }
 
     /**
@@ -642,7 +502,7 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
             useEye(eye);
             draw.run();
         }
-        if (spectating)
+        if (recording.isSpectating())
         {
             useSpectator();
             draw.run();
@@ -652,7 +512,7 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
     private void useSpectator()
     {
         recording.useSpectator();
-        GL20.glUniformMatrix4fv(worldProj, false, spectatorMatrix);
+        GL20.glUniformMatrix4fv(worldProj, false, recording.getSpectatorMatrix());
     }
 
     /**
@@ -686,8 +546,8 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
         double[] forward = new double[3];
         aimed.forward(forward);
         double level = Math.hypot(forward[0], forward[2]);
-        double dx = zoneEdge(zoneX) + ZONE_UNITS / 2.0 - aimed.eyeX();
-        double dz = zoneEdge(zoneZ) + ZONE_UNITS / 2.0 - aimed.eyeZ();
+        double dx = GpuInternals.zoneEdge(zoneX) + GpuInternals.ZONE_UNITS / 2.0 - aimed.eyeX();
+        double dz = GpuInternals.zoneEdge(zoneZ) + GpuInternals.ZONE_UNITS / 2.0 - aimed.eyeZ();
         if (level < 1e-6)
         {
             return dx * dx + dz * dz < PROBE_ZONE_REACH * PROBE_ZONE_REACH;
@@ -735,86 +595,22 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
     private void showInterfaces()
     {
         long from = System.nanoTime();
-        showInterfacesTimed();
+        layers.show(placement, wrist, pointerHit, pointerMet, rawHead());
+        recording.start();
         times.add(FrameTimes.Part.INTERFACES, System.nanoTime() - from);
     }
 
-    private void showInterfacesTimed()
-    {
-        BufferProvider buffer = client.getBufferProvider();
-        picture.copy(buffer);
-        readyPanel(picture.getWidth(), picture.getHeight());
-        startRecording();
-
-        WorldMenu menu = pointer.getMenu();
-        if (client.isMenuOpen() && menu.lift(picture.getPixels(), picture.getWidth(), picture.getHeight(), client.getMenuX(), client.getMenuY(),
-                client.getMenuWidth(), client.getMenuHeight(), rawHead()))
-        {
-            picture.clear(client.getMenuX(), client.getMenuY(), client.getMenuWidth(), client.getMenuHeight());
-            int[] onMenu = pointer.getMenuCursor();
-            if (onMenu != null)
-            {
-                cursor.paint(menu.getCrop().getPixels(), WorldMenu.WIDTH, WorldMenu.HEIGHT, onMenu[0], onMenu[1]);
-            }
-            menuLayer.upload(menu.getCrop().getPixels());
-            menuLayer.place(menu.getBoard());
-        }
-        else
-        {
-            menuLayer.clear();
-        }
-
-        showLabel();
-        paintWrist();
-        settingsPanel.refresh();
-        keyboardPanel.refresh();
-
-        // Paint the dot for the upload only, so pointer hit tests never see it
-        int[] onPanel = pointer.getPanelCursor();
-        if (onPanel != null)
-        {
-            cursor.paint(picture.getPixels(), picture.getWidth(), picture.getHeight(), onPanel[0], onPanel[1]);
-        }
-        panel.upload(picture.getPixels());
-        if (onPanel != null)
-        {
-            cursor.restore(picture.getPixels());
-        }
-    }
-
     /**
-     * Places the action label beside the pointer end while it is on the world with no menu open.
+     * Gets the head pose the steadied recording camera follows, offset as the eyes are, or null if not steadied.
      */
-    private void showLabel()
+    private Pose spectatorHead()
     {
-        boolean changed = label.update(client.getMenu().getMenuEntries());
-        if (!config.pointerLabel() || !pointer.isOnWorld() || !pointerMet || client.isMenuOpen() || label.isEmpty())
+        if (!recording.isSteadied())
         {
-            labelLayer.clear();
-            return;
+            return null;
         }
-        double[] at = new double[3];
-        placement.toRoom(pointerHit[0], pointerHit[1], pointerHit[2], at);
-        Pose head = rawHead();
-        double dx = at[0] - head.x();
-        double dy = at[1] - head.y();
-        double dz = at[2] - head.z();
-        double distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
-        if (distance < 1e-6)
-        {
-            labelLayer.clear();
-            return;
-        }
-        double out = Math.min(LABEL_METRES, distance * NEARER_THAN_WORLD);
-        double scale = out / distance;
-        double metresPerPixel = HUD_PIXEL_RADIANS * config.hudSizePercent() / 100.0 * LABEL_ENLARGED * out;
-        labelBoard.stand(head.x() + dx * scale, head.y() + dy * scale, head.z() + dz * scale, head, LABEL_WIDTH, LABEL_HEIGHT, metresPerPixel, LABEL_RIGHT,
-                LABEL_BELOW);
-        labelLayer.place(labelBoard);
-        if (changed || labelLayer.isCleared())
-        {
-            labelLayer.upload(label.getPixels());
-        }
+        Pose head = rawHead().lifted(placement.getLift());
+        return tabletop ? head : head.ahead(config.headClearanceCm() / 100.0 / frameBodyScale);
     }
 
     /**
@@ -881,31 +677,6 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
         out[0] = x;
         out[1] = Perspective.getTileHeight(client, new LocalPoint(clampedX, clampedZ, client.getTopLevelWorldView()), plane) - OUTLINE_LIFT;
         out[2] = z;
-    }
-
-    /**
-     * Creates the interface panel on first use or canvas resize, and reshapes it when settings change.
-     */
-    private void readyPanel(int width, int height)
-    {
-        if (panel != null && (panel.getPixelWidth() != width || panel.getPixelHeight() != height))
-        {
-            panel.close();
-            panel = null;
-        }
-        if (panel == null)
-        {
-            int chat = CHAT_SIDE_PIXELS * Math.min(width, HUD_CANVAS_WIDTH) / HUD_CANVAS_WIDTH;
-            int inventory = INVENTORY_SIDE_PIXELS * Math.min(width, HUD_CANVAS_WIDTH) / HUD_CANVAS_WIDTH;
-            panel = new HudPanel(headset.getSession(), headset.getRoom(), width, height, chat, inventory, headset.isCylinders());
-            hudShapeStale = true;
-        }
-        if (hudShapeStale)
-        {
-            hudShapeStale = false;
-            panel.shape(config.hudDistance(), HUD_PIXEL_RADIANS * config.hudSizePercent() / 100.0, config.chatSidePercent() / 100.0,
-                    config.inventorySidePercent() / 100.0, Math.toRadians(config.sidesApartDegrees()));
-        }
     }
 
     /**
@@ -1035,7 +806,7 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
         {
             return;
         }
-        wristPicture.draw(matrix, corners, 0, 0, WristPicture.WIDTH, WristPicture.HEIGHT, (float) wrist.getShown());
+        layers.getWristPicture().draw(matrix, corners, 0, 0, WristPicture.WIDTH, WristPicture.HEIGHT, (float) wrist.getShown());
     }
 
     /**
@@ -1056,38 +827,6 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
         room.roomDirection(wristAt[1][0], wristAt[1][1], wristAt[1][2], along);
         room.roomDirection(wristAt[2][0], wristAt[2][1], wristAt[2][2], out);
         wrist.placeOn(at, unit(along), unit(out));
-    }
-
-    /**
-     * Repaints the wrist picture from the interfaces while it is in view.
-     */
-    private void paintWrist()
-    {
-        if (wrist.getShown() <= 0)
-        {
-            return;
-        }
-        int[] pixels = wrist.paint(picture.getPixels(), picture.getWidth(), picture.getHeight(), this::canvasBox, LocalTime.now());
-        int[] onWrist = pointer.getWristCursor();
-        if (onWrist != null)
-        {
-            cursor.paint(pixels, WristPicture.WIDTH, WristPicture.HEIGHT, onWrist[0], onWrist[1]);
-        }
-        wristPicture.upload(pixels);
-    }
-
-    /**
-     * Gets a component's box on the interfaces, or null if not shown.
-     */
-    private int[] canvasBox(int component)
-    {
-        Widget widget = client.getWidget(component);
-        if (widget == null || widget.isHidden())
-        {
-            return null;
-        }
-        Rectangle bounds = widget.getBounds();
-        return bounds == null || bounds.width <= 0 ? null : new int[]{bounds.x, bounds.y, bounds.width, bounds.height};
     }
 
     /**
@@ -1120,188 +859,6 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
     {
         eyes.use(eye);
         GL20.glUniformMatrix4fv(worldProj, false, eyeMatrices[eye]);
-    }
-
-    /**
-     * Starts the recording once the interfaces' size is known, if the settings ask for one.
-     */
-    private void startRecording()
-    {
-        if (recordingTried || !config.recordSession())
-        {
-            return;
-        }
-        recordingTried = true;
-        try
-        {
-            Path directory = RuneLite.RUNELITE_DIR.toPath().resolve("vitavr").resolve("recordings");
-            Files.createDirectories(directory);
-            Path file = directory.resolve("vr-" + LocalDateTime.now().format(RECORDING_STAMP) + ".mp4");
-            AbstractPanel settings = settingsPanel.getPanel();
-            AbstractPanel keyboard = keyboardPanel.getPanel();
-            recording = Recording.start(config.recordMode(), config.oneEyeCamera(), file, config.samples(), new int[]{picture.getWidth(), picture.getHeight()},
-                    new int[][]{{WorldMenu.WIDTH, WorldMenu.HEIGHT}, {LABEL_WIDTH, LABEL_HEIGHT}, {settings.width(), settings.height()}, {keyboard.width(), keyboard.height()}});
-            Logger.info("[VitaVR] Recording the session to " + file);
-        }
-        catch (IOException e)
-        {
-            recordingProblem = "The session was not recorded: " + e.getMessage();
-            Logger.warn("[VitaVR] " + recordingProblem);
-        }
-    }
-
-    /**
-     * Notes whether a picture is taken this frame, and keeps a steadied camera following the head. Called only on frames
-     * the scene is drawn.
-     */
-    private void paceRecording()
-    {
-        long now = System.nanoTime();
-        double seconds = lastPacedNanos == 0 ? 0 : (now - lastPacedNanos) / 1e9;
-        lastPacedNanos = now;
-        recordingDue = recording != null && recording.due(now);
-        spectating = false;
-        if (recording == null || !recording.isSteadied())
-        {
-            return;
-        }
-        Pose head = rawHead().lifted(placement.getLift());
-        if (!tabletop)
-        {
-            head = head.ahead(config.headClearanceCm() / 100.0 / frameBodyScale);
-        }
-        float[] matrix = recording.follow(head, seconds, placement.getRoom());
-        if (recordingDue)
-        {
-            spectatorMatrix = matrix;
-            spectating = true;
-        }
-    }
-
-    /**
-     * Records the frame's picture when one is due.
-     */
-    private void record()
-    {
-        if (!recordingDue)
-        {
-            return;
-        }
-        long from = System.nanoTime();
-        Recording.Layers layers = recordedLayers();
-        if (spectating)
-        {
-            recording.recordSteadied(spectatorMatrix, layers);
-        }
-        else
-        {
-            recording.recordEyes(eyes, eyeMatrices, layers);
-        }
-        times.add(FrameTimes.Part.RECORDING, System.nanoTime() - from);
-    }
-
-    /**
-     * Gets the layers as recorded, leaving out the chat side when the settings hide it from recordings.
-     */
-    private Recording.Layers recordedLayers()
-    {
-        double[][][] strips = null;
-        double[][] across = null;
-        if (panel != null && panel.shown() && recording.fitsInterfaces(picture.getWidth(), picture.getHeight()))
-        {
-            recording.interfaces(picture.getPixels());
-            double[][][] all = panel.strips();
-            double[][] allAcross = panel.stripsAcross();
-            int[] kept = panel.stripsFrom(config.recordHideChat() ? panel.chatSideEnd() : 0);
-            strips = new double[kept.length][][];
-            across = new double[kept.length][];
-            for (int strip = 0; strip < kept.length; strip++)
-            {
-                strips[strip] = inWorld(all[kept[strip]]);
-                across[strip] = allAcross[kept[strip]];
-            }
-        }
-
-        double[][][] floating = new double[4][][];
-        WorldMenu menu = pointer.getMenu();
-        if (!menuLayer.isCleared())
-        {
-            recording.floating(Recording.MENU, menu.getCrop().getPixels());
-            floating[Recording.MENU] = inWorld(menu.getBoard());
-        }
-        if (!labelLayer.isCleared())
-        {
-            recording.floating(Recording.LABEL, label.getPixels());
-            floating[Recording.LABEL] = inWorld(labelBoard);
-        }
-        if (settingsPanel.isShown())
-        {
-            recording.floating(Recording.SETTINGS, settingsPanel.getPanel().pixels());
-            floating[Recording.SETTINGS] = inWorld(settingsPanel.getBoard());
-        }
-        if (keyboardPanel.isShown())
-        {
-            recording.floating(Recording.KEYBOARD, keyboardPanel.getPanel().pixels());
-            floating[Recording.KEYBOARD] = inWorld(keyboardPanel.getBoard());
-        }
-        return new Recording.Layers(strips, across, floating);
-    }
-
-    /**
-     * Gets a billboard's corners in the world, offset as the eyes are.
-     */
-    private double[][] inWorld(Billboard board)
-    {
-        double[][] corners = new double[4][3];
-        board.corners(corners);
-        return inWorld(corners);
-    }
-
-    /**
-     * Gets room corners in the world, offset as the eyes are.
-     */
-    private double[][] inWorld(double[][] roomCorners)
-    {
-        double[][] placed = new double[roomCorners.length][3];
-        for (int corner = 0; corner < roomCorners.length; corner++)
-        {
-            double[] at = roomCorners[corner];
-            placement.toWorld(at[0], at[1], at[2], placed[corner]);
-        }
-        return placed;
-    }
-
-    /**
-     * Ends the recording, if there is one, while its context is current.
-     */
-    private void finishRecording()
-    {
-        if (recording == null)
-        {
-            return;
-        }
-        try
-        {
-            recorded = recording.finish();
-            Logger.info("[VitaVR] Recorded the session to " + recorded + (recording.dropped() > 0 ? ", " + recording.dropped() + " frames dropped" : ""));
-        }
-        catch (IOException e)
-        {
-            recordingProblem = "The recording failed: " + e.getMessage();
-            Logger.warn("[VitaVR] " + recordingProblem);
-        }
-        catch (InterruptedException e)
-        {
-            Thread.currentThread().interrupt();
-            recordingProblem = "The recording was interrupted";
-        }
-        finally
-        {
-            recording.close();
-            recording = null;
-            spectating = false;
-            recordingDue = false;
-        }
     }
 
     /**
@@ -1338,10 +895,10 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
             eyes.use(eye);
             drawOver(placement.eye(eye), eyeMatrices[eye]);
         }
-        if (spectating)
+        if (recording.isSpectating())
         {
             recording.useSpectator();
-            drawOver(recording.getSpectatorView(), spectatorMatrix);
+            drawOver(recording.getSpectatorView(), recording.getSpectatorMatrix());
         }
         eyes.resolve();
         for (int eye = 0; eye < EYES; eye++)
@@ -1352,7 +909,7 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
             eyeLayer.release(eye, headset.view(eye));
         }
         eyesDrawn = true;
-        record();
+        recording.record(eyes, eyeMatrices);
 
         if (config.mirror())
         {
@@ -1431,14 +988,11 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
             probe = new PointerProbe();
             beams = new Beams();
             markers = new Markers();
-            menuLayer = new FloatingLayer(headset, WorldMenu.WIDTH, WorldMenu.HEIGHT);
-            labelLayer = new FloatingLayer(headset, LABEL_WIDTH, LABEL_HEIGHT);
-            settingsPanel = new RoomPanel(headset, new SettingsPanel(config, configManager), SETTINGS_METRES, SETTINGS_BELOW_EYES);
-            keyboardPanel = new RoomPanel(headset, new KeyboardPanel(keys), KEYBOARD_METRES, KEYBOARD_BELOW_EYES);
-            ownPanels = Arrays.asList(settingsPanel, keyboardPanel);
+            layers = new Layers(client, config, configManager, keys, headset, pointer);
+            recording = new Recording(config, layers, placement, times);
+            roofs = new Roofs(client, config, internals);
             atlas = new AtlasQuad(ActorOverlays.ATLAS_WIDTH, ActorOverlays.ATLAS_HEIGHT);
             shade = new ComfortShade();
-            wristPicture = new AtlasQuad(WristPicture.WIDTH, WristPicture.HEIGHT);
             return true;
         }
         catch (RuntimeException | UnsatisfiedLinkError e)
@@ -1484,50 +1038,6 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
         }
     }
 
-    /**
-     * Gets whether a top level zone is within three zones of the player.
-     */
-    private boolean underCeiling(Scene scene, int zoneX, int zoneZ)
-    {
-        if (ceilingsFrom == NO_CEILINGS || scene.getWorldViewId() != WorldView.TOPLEVEL)
-        {
-            return false;
-        }
-        int playerZoneX = zoneOf(placement.anchorX());
-        int playerZoneZ = zoneOf(placement.anchorZ());
-        return Math.abs(zoneX - playerZoneX) <= CEILING_ZONES && Math.abs(zoneZ - playerZoneZ) <= CEILING_ZONES;
-    }
-
-    /**
-     * Draws the undersides of a zone's levels above the player, dimmed, as ceilings.
-     */
-    private void drawCeilings(Projection projection, Scene scene, int zoneX, int zoneZ)
-    {
-        float light = config.ceilingLightPercent() / 100f;
-        internals.levels(scene, ceilingsFrom, TOP_LEVEL);
-        GL11.glCullFace(GL11.GL_FRONT);
-        GL14.glBlendColor(light, light, light, 1f);
-        GL14.glBlendFuncSeparate(GL14.GL_CONSTANT_COLOR, GL11.GL_ZERO, GL11.GL_ONE, GL11.GL_ONE);
-        try
-        {
-            forEachView(() -> gpu.drawZoneOpaque(projection, scene, zoneX, zoneZ), nearPointer(scene, zoneX, zoneZ));
-        }
-        finally
-        {
-            GL11.glCullFace(GL11.GL_BACK);
-            GL14.glBlendFuncSeparate(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA, GL11.GL_ONE, GL11.GL_ONE);
-            internals.levels(scene, ceilingsMinLevel, TOP_LEVEL);
-        }
-    }
-
-    /**
-     * Gets whether the floors and roofs above are kept.
-     */
-    private boolean keepRoofs()
-    {
-        return config.viewMode() == ViewMode.FIRST_PERSON && config.keepRoofsIndoors() && client.getVarbitValue(VarbitID.OPTION_HIDE_ROOFTOPS) == 0;
-    }
-
     @Override
     public void preSceneDraw(Scene scene, Projection entityProjection, float cameraX, float cameraY, float cameraZ, float cameraPitch, float cameraYaw,
                              int minLevel, int level, int maxLevel, Set<Integer> hideRoofIds)
@@ -1542,14 +1052,9 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
             safely(this::beginFrame);
         }
         // Kept roofs draw every level up to the top
-        boolean keep = toplevel && keepRoofs();
-        if (toplevel)
-        {
-            ceilingsFrom = keep && level < TOP_LEVEL ? level + 1 : NO_CEILINGS;
-            ceilingsMinLevel = minLevel;
-        }
-        Set<Integer> roofs = keep ? Collections.emptySet() : hideRoofIds;
-        gpu.preSceneDraw(scene, entityProjection, cameraX, cameraY, cameraZ, cameraPitch, cameraYaw, minLevel, level, keep ? TOP_LEVEL : maxLevel, roofs);
+        boolean keep = roofs != null && roofs.keeps(scene, minLevel, level);
+        gpu.preSceneDraw(scene, entityProjection, cameraX, cameraY, cameraZ, cameraPitch, cameraYaw, minLevel, level, keep ? Roofs.TOP_LEVEL : maxLevel,
+                keep ? Collections.emptySet() : hideRoofIds);
         if (internals != null)
         {
             safely(() -> internals.prepare(scene));
@@ -1560,7 +1065,7 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
             {
                 View centre = placement.getCentre();
                 internals.sortFrom(scene, centre.eyeX(), centre.eyeY(), centre.eyeZ(), centre.yaw(), centre.pitch());
-                paceRecording();
+                recording.pace(spectatorHead());
                 startEyes();
             });
         }
@@ -1573,11 +1078,9 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
         {
             if (!offTable(scene, zoneX, zoneZ))
             {
-                forEachView(() -> gpu.drawZoneOpaque(projection, scene, zoneX, zoneZ), nearPointer(scene, zoneX, zoneZ));
-                if (underCeiling(scene, zoneX, zoneZ))
-                {
-                    safely(() -> drawCeilings(projection, scene, zoneX, zoneZ));
-                }
+                Runnable drawZone = () -> forEachView(() -> gpu.drawZoneOpaque(projection, scene, zoneX, zoneZ), nearPointer(scene, zoneX, zoneZ));
+                drawZone.run();
+                safely(() -> roofs.ceilings(scene, zoneX, zoneZ, placement.anchorX(), placement.anchorZ(), drawZone));
             }
             return;
         }
@@ -1600,7 +1103,7 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
             {
                 useEye(1);
                 internals.drawZoneAlphaAgain(scene, level, zoneX, zoneZ);
-                if (spectating)
+                if (recording.isSpectating())
                 {
                     useSpectator();
                     internals.drawZoneAlphaAgain(scene, level, zoneX, zoneZ);
@@ -1799,7 +1302,10 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
     public void close()
     {
         leaveEyes();
-        finishRecording();
+        if (recording != null)
+        {
+            recording.close();
+        }
         try
         {
             if (frameBegun)
@@ -1812,27 +1318,11 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
         {
             Logger.error(e, "[VitaVR] Ending the last headset frame failed");
         }
-        if (menuLayer != null)
-        {
-            menuLayer.close();
-            menuLayer = null;
-        }
         keys.releaseAll();
-        ownPanels = Collections.emptyList();
-        if (settingsPanel != null)
+        if (layers != null)
         {
-            settingsPanel.close();
-            settingsPanel = null;
-        }
-        if (keyboardPanel != null)
-        {
-            keyboardPanel.close();
-            keyboardPanel = null;
-        }
-        if (labelLayer != null)
-        {
-            labelLayer.close();
-            labelLayer = null;
+            layers.close();
+            layers = null;
         }
         if (atlas != null)
         {
@@ -1844,17 +1334,7 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
             shade.close();
             shade = null;
         }
-        if (wristPicture != null)
-        {
-            wristPicture.close();
-            wristPicture = null;
-        }
         overlays.clear();
-        if (panel != null)
-        {
-            panel.close();
-            panel = null;
-        }
         if (pointer != null)
         {
             pointer.close();
