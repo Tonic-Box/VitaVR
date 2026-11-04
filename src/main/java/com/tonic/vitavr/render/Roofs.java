@@ -71,7 +71,7 @@ final class Roofs
     boolean hasCeilings(Scene scene, int zoneX, int zoneZ, double playerX, double playerZ)
     {
         return ceilingsFrom != NO_CEILINGS && scene.getWorldViewId() == WorldView.TOPLEVEL && Math.abs(zoneX - GpuInternals.zoneOf(playerX)) <= CEILING_ZONES
-                && Math.abs(zoneZ - GpuInternals.zoneOf(playerZ)) <= CEILING_ZONES;
+                && Math.abs(zoneZ - GpuInternals.zoneOf(playerZ)) <= CEILING_ZONES && internals.hasFacesFrom(scene, zoneX, zoneZ, ceilingsFrom);
     }
 
     /**

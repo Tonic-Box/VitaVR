@@ -48,6 +48,7 @@ final class GpuInternals
     private final Field maxLevel;
     private final Field hideRoofIds;
     private final MethodHandle initialized;
+    private final Field levelOffsets;
     private final MethodHandle renderAlpha;
     private final Field cameraYaw;
     private final Field cameraPitch;
@@ -92,6 +93,7 @@ final class GpuInternals
             maxLevel = field(sceneContext, "maxLevel");
             hideRoofIds = field(sceneContext, "hideRoofIds");
             initialized = MethodHandles.lookup().unreflectGetter(field(zone, "initialized")).asType(MethodType.methodType(boolean.class, Object.class));
+            levelOffsets = field(zone, "levelOffsets");
             renderAlpha = handle(method(zone, "renderAlpha", modelUploader, int.class, int.class, int.class, int.class, int.class, int.class, int.class, int.class, Set.class,
                     boolean.class), MethodType.methodType(void.class, Object.class, Object.class, int.class, int.class, int.class, int.class, int.class, int.class, int.class,
                     int.class, Set.class, boolean.class));
@@ -298,6 +300,32 @@ final class GpuInternals
         {
             throw rethrown(e);
         }
+    }
+
+    /**
+     * Gets whether a zone has any faces on a level or above.
+     *
+     * @param scene The scene the zone is in.
+     * @param zoneX The zone x.
+     * @param zoneZ The zone z.
+     * @param from The lowest level checked.
+     * @return Whether the zone has faces on that level or above.
+     */
+    boolean hasFacesFrom(Scene scene, int zoneX, int zoneZ, int from)
+    {
+        SceneState state = state(scene);
+        if (state == null)
+        {
+            return false;
+        }
+        Object zone = state.zones[zoneX][zoneZ];
+        if (!isInitialized(zone))
+        {
+            return false;
+        }
+        int[] ends = (int[]) get(levelOffsets, zone);
+        int start = from == 0 ? 0 : ends[from - 1];
+        return ends[ends.length - 1] > start;
     }
 
     /**
