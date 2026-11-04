@@ -1,0 +1,192 @@
+package com.tonic.vitavr.xr;
+
+import lombok.Getter;
+import org.lwjgl.PointerBuffer;
+import org.lwjgl.openxr.XR10;
+import org.lwjgl.openxr.XrInstance;
+import org.lwjgl.openxr.XrSession;
+import org.lwjgl.openxr.XrSwapchain;
+import org.lwjgl.openxr.XrSwapchainCreateInfo;
+import org.lwjgl.openxr.XrSwapchainImageAcquireInfo;
+import org.lwjgl.openxr.XrSwapchainImageBaseHeader;
+import org.lwjgl.openxr.XrSwapchainImageOpenGLKHR;
+import org.lwjgl.openxr.XrSwapchainImageReleaseInfo;
+import org.lwjgl.openxr.XrSwapchainImageWaitInfo;
+import org.lwjgl.opengl.GL11;
+import org.lwjgl.opengl.GL21;
+import org.lwjgl.opengl.GL30;
+import org.lwjgl.system.MemoryStack;
+
+import java.nio.IntBuffer;
+import java.nio.LongBuffer;
+
+import static com.tonic.vitavr.xr.XrChecks.check;
+
+/**
+ * An OpenXR swapchain with a framebuffer per image, using sRGB when offered.
+ */
+public final class Images implements AutoCloseable
+{
+    @Getter
+    private final XrSwapchain swapchain;
+    private final XrInstance instance;
+    @Getter
+    private final int width;
+    @Getter
+    private final int height;
+    private final int[] textures;
+    private final int[] framebuffers;
+    private int acquired = -1;
+    private boolean closed;
+
+    private Images(XrSwapchain swapchain, XrInstance instance, int width, int height, int[] textures)
+    {
+        this.swapchain = swapchain;
+        this.instance = instance;
+        this.width = width;
+        this.height = height;
+        this.textures = textures;
+        this.framebuffers = new int[textures.length];
+
+        int[] previous = new int[1];
+        GL11.glGetIntegerv(GL30.GL_DRAW_FRAMEBUFFER_BINDING, previous);
+        for (int i = 0; i < textures.length; i++)
+        {
+            framebuffers[i] = GL30.glGenFramebuffers();
+            GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, framebuffers[i]);
+            GL30.glFramebufferTexture2D(GL30.GL_DRAW_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT0, GL11.GL_TEXTURE_2D, textures[i], 0);
+        }
+        GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, previous[0]);
+    }
+
+    /**
+     * Creates a swapchain in the OpenGL context current on the calling thread.
+     *
+     * @param session The headset's session.
+     * @param width The image width, in pixels.
+     * @param height The image height, in pixels.
+     * @return The new swapchain.
+     * @throws IllegalStateException if the runtime refuses it
+     */
+    public static Images create(XrSession session, int width, int height)
+    {
+        try (MemoryStack stack = MemoryStack.stackPush())
+        {
+            XrSwapchainCreateInfo info = XrSwapchainCreateInfo.calloc(stack).type$Default()
+                    .usageFlags(XR10.XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT | XR10.XR_SWAPCHAIN_USAGE_TRANSFER_DST_BIT)
+                    .format(format(session, stack))
+                    .sampleCount(1)
+                    .width(width)
+                    .height(height)
+                    .faceCount(1)
+                    .arraySize(1)
+                    .mipCount(1);
+            PointerBuffer made = stack.mallocPointer(1);
+            check(XR10.xrCreateSwapchain(session, info, made), session.getInstance(), "Making the headset's images");
+            XrSwapchain swapchain = new XrSwapchain(made.get(0), session);
+
+            IntBuffer count = stack.mallocInt(1);
+            check(XR10.xrEnumerateSwapchainImages(swapchain, count, null), session.getInstance(), "Listing the headset's images");
+            XrSwapchainImageOpenGLKHR.Buffer images = XrSwapchainImageOpenGLKHR.calloc(count.get(0), stack);
+            for (int i = 0; i < count.get(0); i++)
+            {
+                images.get(i).type$Default();
+            }
+            check(XR10.xrEnumerateSwapchainImages(swapchain, count, XrSwapchainImageBaseHeader.create(images.address(), count.get(0))), session.getInstance(), "Listing the headset's images");
+            int[] textures = new int[count.get(0)];
+            for (int i = 0; i < textures.length; i++)
+            {
+                textures[i] = images.get(i).image();
+            }
+            return new Images(swapchain, session.getInstance(), width, height, textures);
+        }
+    }
+
+    private static long format(XrSession session, MemoryStack stack)
+    {
+        IntBuffer count = stack.mallocInt(1);
+        check(XR10.xrEnumerateSwapchainFormats(session, count, null), session.getInstance(), "Listing the image formats");
+        LongBuffer formats = stack.mallocLong(count.get(0));
+        check(XR10.xrEnumerateSwapchainFormats(session, count, formats), session.getInstance(), "Listing the image formats");
+        for (long wanted : new long[]{GL21.GL_SRGB8_ALPHA8, GL11.GL_RGBA8})
+        {
+            for (int i = 0; i < count.get(0); i++)
+            {
+                if (formats.get(i) == wanted)
+                {
+                    return wanted;
+                }
+            }
+        }
+        return formats.get(0);
+    }
+
+    /**
+     * Acquires the next image, waiting until the runtime is done with it.
+     *
+     * @return The acquired image's framebuffer.
+     * @throws IllegalStateException if an image is already taken
+     */
+    public int acquire()
+    {
+        if (acquired >= 0)
+        {
+            throw new IllegalStateException("An image is already taken");
+        }
+        try (MemoryStack stack = MemoryStack.stackPush())
+        {
+            IntBuffer index = stack.mallocInt(1);
+            check(XR10.xrAcquireSwapchainImage(swapchain, XrSwapchainImageAcquireInfo.calloc(stack).type$Default(), index), instance, "Taking an image");
+            XrSwapchainImageWaitInfo wait = XrSwapchainImageWaitInfo.calloc(stack).type$Default().timeout(XR10.XR_INFINITE_DURATION);
+            check(XR10.xrWaitSwapchainImage(swapchain, wait), instance, "Waiting for an image");
+            acquired = index.get(0);
+            return framebuffers[acquired];
+        }
+    }
+
+    /**
+     * @return The acquired image's texture.
+     */
+    public int acquiredTexture()
+    {
+        if (acquired < 0)
+        {
+            throw new IllegalStateException("No image is taken");
+        }
+        return textures[acquired];
+    }
+
+    /**
+     * Releases the acquired image to the runtime.
+     */
+    public void release()
+    {
+        if (acquired < 0)
+        {
+            return;
+        }
+        try (MemoryStack stack = MemoryStack.stackPush())
+        {
+            check(XR10.xrReleaseSwapchainImage(swapchain, XrSwapchainImageReleaseInfo.calloc(stack).type$Default()), instance, "Handing an image back");
+            acquired = -1;
+        }
+    }
+
+    /**
+     * Destroys the swapchain, in the OpenGL context it was created in. Safe to call more than once.
+     */
+    @Override
+    public void close()
+    {
+        if (closed)
+        {
+            return;
+        }
+        closed = true;
+        for (int framebuffer : framebuffers)
+        {
+            GL30.glDeleteFramebuffers(framebuffer);
+        }
+        XR10.xrDestroySwapchain(swapchain);
+    }
+}
