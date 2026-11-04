@@ -116,9 +116,19 @@ public final class RoomToWorld
      */
     public void room(double x, double y, double z, double[] out)
     {
-        double dx = (x - originX) / unitsPerMetre;
-        double dy = (y - originY) / unitsPerMetre;
-        double dz = (z - originZ) / unitsPerMetre;
+        roomDirection((x - originX) / unitsPerMetre, (y - originY) / unitsPerMetre, (z - originZ) / unitsPerMetre, out);
+    }
+
+    /**
+     * Converts a world direction to the room, unscaled.
+     *
+     * @param dx  The world x (across).
+     * @param dy  The world y (down).
+     * @param dz  The world z (along).
+     * @param out Receives the room direction, across, up and back.
+     */
+    public void roomDirection(double dx, double dy, double dz, double[] out)
+    {
         double cos = Math.cos(yaw);
         double sin = Math.sin(yaw);
         double across = dx * cos + dz * sin;

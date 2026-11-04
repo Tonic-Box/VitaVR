@@ -16,6 +16,7 @@ import org.lwjgl.opengl.GL12;
 import org.lwjgl.system.MemoryUtil;
 
 import java.nio.IntBuffer;
+import java.util.Arrays;
 
 /**
  * The HUD panel, split into chat, middle and inventory columns, each its own curved or flat layer.
@@ -317,6 +318,27 @@ public final class HudPanel implements AutoCloseable
     public double[][] stripsAcross()
     {
         return shape.stripsAcross(STRIPS_PER_COLUMN);
+    }
+
+    /**
+     * Gets the strips that start at or after a point across the picture.
+     *
+     * @param across The start point, 0 to 1 across the picture.
+     * @return The kept strip indices, left to right.
+     */
+    public int[] stripsFrom(double across)
+    {
+        double[][] all = stripsAcross();
+        int[] kept = new int[all.length];
+        int count = 0;
+        for (int strip = 0; strip < all.length; strip++)
+        {
+            if (all[strip][0] >= across - 1e-9)
+            {
+                kept[count++] = strip;
+            }
+        }
+        return Arrays.copyOf(kept, count);
     }
 
     /**

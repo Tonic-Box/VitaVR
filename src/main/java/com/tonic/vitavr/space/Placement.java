@@ -14,7 +14,6 @@ public final class Placement
     private static final int EYES = 2;
     /** A standing player's eye height, in metres. */
     private static final double STANDING_EYE = 1.65;
-    private static final double USUAL_EYE_HEIGHT = 182;
     private static final float STICK_PUSHED = 0.7f;
     private static final float STICK_LET_GO = 0.3f;
     private static final float STICK_DEAD = 0.2f;
@@ -81,31 +80,32 @@ public final class Placement
     }
 
     /**
-     * Places the room under the player for a frame, and the eyes in it.
+     * Places the room under the player in first person, and the eyes in it.
      *
-     * @param headset   The headset, with this frame's eyes.
-     * @param config    VitaVR's settings.
-     * @param playerX   The player's x.
-     * @param groundY   The ground height under the player.
-     * @param playerZ   The player's z.
-     * @param eyeHeight The body's resting eye height in game units, or NaN if not known yet.
-     * @param shift     How far the body's head has moved from rest, in game units.
-     * @param seconds   The time since the last frame.
-     * @return Whether the room jumped to the player, as after a teleport.
+     * @param headset   The headset.
+     * @param config    The plugin config.
+     * @param playerX   The player x (across).
+     * @param groundY   The ground height under the player (down).
+     * @param playerZ   The player z (along).
+     * @param eyeHeight The body's resting eye height, in game units.
+     * @param bodyUnitsPerMetre The game units per metre at the body's size.
+     * @param shift     The body's head offset from rest, across, down and along, in game units.
+     * @param seconds   The time since the last frame, in seconds.
+     * @return Whether the room jumped instead of following.
      */
-    public boolean place(Headset headset, VitaVRConfig config, double playerX, double groundY, double playerZ, double eyeHeight, double[] shift, double seconds)
+    public boolean place(Headset headset, VitaVRConfig config, double playerX, double groundY, double playerZ, double eyeHeight, double bodyUnitsPerMetre, double[] shift,
+                         double seconds)
     {
         boolean jumped = anchor.step(playerX, groundY, playerZ, seconds);
-        double bodyEyeHeight = Double.isNaN(eyeHeight) ? USUAL_EYE_HEIGHT : eyeHeight;
         double unitsPerMetre = config.unitsPerMetre();
         if (Double.isNaN(calibratedHead))
         {
             calibratedHead = (headset.eyePose(0).y() + headset.eyePose(1).y()) / 2;
         }
-        lift = bodyEyeHeight / unitsPerMetre - calibratedHead;
-        Pose left = lifted(headset.eyePose(0), lift);
-        Pose right = lifted(headset.eyePose(1), lift);
-        Pose head = new Pose((left.x() + right.x()) / 2, (left.y() + right.y()) / 2, (left.z() + right.z()) / 2, left.qx(), left.qy(), left.qz(), left.qw());
+        lift = eyeHeight / unitsPerMetre - calibratedHead;
+        Pose left = headset.eyePose(0).lifted(lift);
+        Pose right = headset.eyePose(1).lifted(lift);
+        Pose head = Pose.between(left, right);
 
         room.tilt(0, 1, 0);
         room.place(anchor.x() + shift[0], anchor.y() + shift[1], anchor.z() + shift[2], turnYaw, unitsPerMetre);
@@ -114,7 +114,7 @@ public final class Placement
         room.view(right, eyes[1]);
 
         // Move the eyes in front of the body's head
-        double bodyScale = bodyEyeHeight / STANDING_EYE / unitsPerMetre;
+        double bodyScale = bodyUnitsPerMetre / unitsPerMetre;
         clearHead(config.headClearanceCm() / 100.0 / bodyScale * unitsPerMetre);
         return jumped;
     }
@@ -137,7 +137,7 @@ public final class Placement
         lift = 0;
         Pose left = headset.eyePose(0);
         Pose right = headset.eyePose(1);
-        Pose head = new Pose((left.x() + right.x()) / 2, (left.y() + right.y()) / 2, (left.z() + right.z()) / 2, left.qx(), left.qy(), left.qz(), left.qw());
+        Pose head = Pose.between(left, right);
         if (table == null || tableHeight != config.tableHeight())
         {
             tableHeight = config.tableHeight();
@@ -263,8 +263,30 @@ public final class Placement
         return new double[]{head.x() + x * TABLE_AHEAD_METRES, height, head.z() + z * TABLE_AHEAD_METRES, -z, x};
     }
 
-    private static Pose lifted(Pose pose, double lift)
+    /**
+     * Converts a room point to the world, lifted as the eyes are.
+     *
+     * @param x   The room x, in metres.
+     * @param y   The room y (up), in metres.
+     * @param z   The room z (back), in metres.
+     * @param out Receives the world point, across, down and along.
+     */
+    public void toWorld(double x, double y, double z, double[] out)
     {
-        return lift == 0 ? pose : new Pose(pose.x(), pose.y() + lift, pose.z(), pose.qx(), pose.qy(), pose.qz(), pose.qw());
+        room.point(x, y + lift, z, out);
+    }
+
+    /**
+     * Converts a world point to the room, removing the eye lift.
+     *
+     * @param x   The world x (across).
+     * @param y   The world y (down).
+     * @param z   The world z (along).
+     * @param out Receives the room point, across, up and back, in metres.
+     */
+    public void toRoom(double x, double y, double z, double[] out)
+    {
+        room.room(x, y, z, out);
+        out[1] -= lift;
     }
 }

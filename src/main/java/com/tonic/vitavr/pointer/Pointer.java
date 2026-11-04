@@ -108,7 +108,7 @@ public final class Pointer
             onPanel = false;
             return;
         }
-        room.view(lifted(held, lift), view);
+        room.view(held.lifted(lift), view);
         double[] forward = new double[3];
         view.forward(forward);
         PickCamera.set((float) view.eyeX(), (float) view.eyeY(), (float) view.eyeZ(), (float) forward[0], (float) forward[1], (float) forward[2]);
@@ -337,7 +337,7 @@ public final class Pointer
         {
             reach = Math.min(reach, wrist.reach(held));
         }
-        Pose aim = lifted(held, lift);
+        Pose aim = held.lifted(lift);
         double[] direction = new double[3];
         aim.rotate(0, 0, -1, direction);
         room.point(aim.x(), aim.y(), aim.z(), from);
@@ -417,8 +417,4 @@ public final class Pointer
                 || name.startsWith("WIDGET_TARGET_ON_") && action != MenuAction.WIDGET_TARGET_ON_WIDGET || name.startsWith("EXAMINE_");
     }
 
-    private static Pose lifted(Pose pose, double lift)
-    {
-        return lift == 0 ? pose : new Pose(pose.x(), pose.y() + lift, pose.z(), pose.qx(), pose.qy(), pose.qz(), pose.qw());
-    }
 }

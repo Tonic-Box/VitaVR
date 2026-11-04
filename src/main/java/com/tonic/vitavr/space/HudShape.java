@@ -283,22 +283,22 @@ public final class HudShape
     /** Gets a pointer hit on a quad: distance, x and y from 0 to 1, and 1 if on it. */
     private static double[] crossQuad(Pose aim, double[] direction, double[][] corners)
     {
-        double[] u = minus(corners[1], corners[0]);
-        double[] v = minus(corners[3], corners[0]);
+        double[] u = Vectors.minus(corners[1], corners[0]);
+        double[] v = Vectors.minus(corners[3], corners[0]);
         double[] normal = {u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]};
-        double facing = dot(direction, normal);
+        double facing = Vectors.dot(direction, normal);
         if (Math.abs(facing) < 1e-12)
         {
             return null;
         }
-        double t = dot(minus(corners[0], new double[] {aim.x(), aim.y(), aim.z()}), normal) / facing;
+        double t = Vectors.dot(Vectors.minus(corners[0], new double[] {aim.x(), aim.y(), aim.z()}), normal) / facing;
         if (t <= 0)
         {
             return null;
         }
         double[] hit = {aim.x() + direction[0] * t - corners[0][0], aim.y() + direction[1] * t - corners[0][1], aim.z() + direction[2] * t - corners[0][2]};
-        double across = dot(hit, u) / dot(u, u);
-        double down = dot(hit, v) / dot(v, v);
+        double across = Vectors.dot(hit, u) / Vectors.dot(u, u);
+        double down = Vectors.dot(hit, v) / Vectors.dot(v, v);
         boolean on = across >= 0 && across < 1 && down >= 0 && down < 1;
         return new double[] {t, across, down, on ? 1 : 0};
     }
@@ -364,16 +364,6 @@ public final class HudShape
         out[0] = centreX + across * Math.cos(yaw) - forward * Math.sin(yaw);
         out[1] = centreY + up;
         out[2] = centreZ - across * Math.sin(yaw) - forward * Math.cos(yaw);
-    }
-
-    private static double[] minus(double[] a, double[] b)
-    {
-        return new double[] {a[0] - b[0], a[1] - b[1], a[2] - b[2]};
-    }
-
-    private static double dot(double[] a, double[] b)
-    {
-        return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
     }
 
     /**

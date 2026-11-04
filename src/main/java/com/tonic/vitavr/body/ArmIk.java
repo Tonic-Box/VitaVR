@@ -1,5 +1,13 @@
 package com.tonic.vitavr.body;
 
+import static com.tonic.vitavr.space.Vectors.cross;
+import static com.tonic.vitavr.space.Vectors.distance;
+import static com.tonic.vitavr.space.Vectors.dot;
+import static com.tonic.vitavr.space.Vectors.length;
+import static com.tonic.vitavr.space.Vectors.minus;
+import static com.tonic.vitavr.space.Vectors.plus;
+import static com.tonic.vitavr.space.Vectors.scale;
+
 /**
  * Two-bone IK that bends a posed model's arm to reach a point, with the elbow bent towards a pole.
  */
@@ -195,40 +203,5 @@ public final class ArmIk
         double[] other = Math.abs(v[0]) < 0.9 ? new double[] {1, 0, 0} : new double[] {0, 1, 0};
         double[] out = cross(v, other);
         return scale(out, 1 / length(out));
-    }
-
-    static double[] cross(double[] a, double[] b)
-    {
-        return new double[] {a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]};
-    }
-
-    private static double dot(double[] a, double[] b)
-    {
-        return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
-    }
-
-    private static double[] plus(double[] a, double[] b)
-    {
-        return new double[] {a[0] + b[0], a[1] + b[1], a[2] + b[2]};
-    }
-
-    private static double[] minus(double[] a, double[] b)
-    {
-        return new double[] {a[0] - b[0], a[1] - b[1], a[2] - b[2]};
-    }
-
-    private static double[] scale(double[] v, double by)
-    {
-        return new double[] {v[0] * by, v[1] * by, v[2] * by};
-    }
-
-    private static double length(double[] v)
-    {
-        return Math.sqrt(dot(v, v));
-    }
-
-    private static double distance(double[] a, double[] b)
-    {
-        return length(minus(a, b));
     }
 }

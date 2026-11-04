@@ -124,9 +124,9 @@ public final class View
         double vertical = 2 / (tanUp - tanDown);
         double skewVertical = (tanUp + tanDown) / (tanUp - tanDown);
 
-        double eyeRight = dot(right, eye);
-        double eyeDown = dot(down, eye);
-        double eyeForward = dot(forward, eye);
+        double eyeRight = Vectors.dot(right, eye);
+        double eyeDown = Vectors.dot(down, eye);
+        double eyeForward = Vectors.dot(forward, eye);
 
         // Depth is 2 * near / distance; scale so the shader depth bias matches the GPU plugin's near plane
         double scale = GPU_NEAR / NEAR;
@@ -147,10 +147,5 @@ public final class View
             }
         }
         return matrix;
-    }
-
-    private static double dot(double[] a, double[] b)
-    {
-        return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
     }
 }

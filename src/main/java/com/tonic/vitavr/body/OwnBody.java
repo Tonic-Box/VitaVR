@@ -11,6 +11,12 @@ import net.runelite.api.PlayerComposition;
 
 import java.util.Arrays;
 
+import static com.tonic.vitavr.space.Vectors.cross;
+import static com.tonic.vitavr.space.Vectors.dot;
+import static com.tonic.vitavr.space.Vectors.minus;
+import static com.tonic.vitavr.space.Vectors.scale;
+import static com.tonic.vitavr.space.Vectors.unit;
+
 /**
  * Shapes the player's own body for first person: idle arms follow the controllers, otherwise the game pose is used.
  * Changes are client side only.
@@ -42,7 +48,6 @@ public final class OwnBody
     /** The last drawn ground height (down), or NaN before the first draw. */
     @Getter
     private double ground = Double.NaN;
-    @Getter
     private double eyeHeight = Double.NaN;
     @Getter
     private boolean armsFollowing;
@@ -105,6 +110,22 @@ public final class OwnBody
         this.leftHand = leftHand;
         this.seconds = seconds;
         leftWrist = null;
+    }
+
+    /**
+     * @return The resting eye height in game units, or the usual height until measured.
+     */
+    public double restEyeHeight()
+    {
+        return Double.isNaN(eyeHeight) ? USUAL_EYE_HEIGHT : eyeHeight;
+    }
+
+    /**
+     * @return The game units per metre at the body's size.
+     */
+    public double unitsPerMetre()
+    {
+        return restEyeHeight() / STANDING_EYE_METRES;
     }
 
     /**
@@ -302,7 +323,7 @@ public final class OwnBody
         {
             surface = Math.max(surface, (xs[vertex] - at[0]) * out[0] + (ys[vertex] - at[1]) * out[1] + (zs[vertex] - at[2]) * out[2]);
         }
-        double unitsPerMetre = (Double.isNaN(eyeHeight) ? USUAL_EYE_HEIGHT : eyeHeight) / STANDING_EYE_METRES;
+        double unitsPerMetre = unitsPerMetre();
         double[] onSurface = new double[3];
         for (int axis = 0; axis < 3; axis++)
         {
@@ -400,7 +421,7 @@ public final class OwnBody
      */
     private void fadeNearEyes(Model model, double[] eyeInModel)
     {
-        double unitsPerMetre = (Double.isNaN(eyeHeight) ? USUAL_EYE_HEIGHT : eyeHeight) / STANDING_EYE_METRES;
+        double unitsPerMetre = unitsPerMetre();
         double from = FADE_FROM_METRES * unitsPerMetre;
         double most = FADE_MOST_METRES * unitsPerMetre;
         int faces = model.getFaceCount();
@@ -480,8 +501,8 @@ public final class OwnBody
     {
         double[] f = unit(forward);
         double[] u = unit(minus(up, scale(f, dot(up, f))));
-        double[] r = scale(ArmIk.cross(u, f), -1);
-        double[] modelRight = scale(ArmIk.cross(MODEL_UP, MODEL_FORWARD), -1);
+        double[] r = scale(cross(u, f), -1);
+        double[] modelRight = scale(cross(MODEL_UP, MODEL_FORWARD), -1);
         double[][] held = {{r[0], u[0], f[0]}, {r[1], u[1], f[1]}, {r[2], u[2], f[2]}};
         double[][] model = {modelRight, MODEL_UP, MODEL_FORWARD};
         return ArmIk.times(held, model);
@@ -517,26 +538,5 @@ public final class OwnBody
     private static double eased(double from, double to, double seconds, double timeConstant)
     {
         return from + (to - from) * (1 - Math.exp(-Math.max(0, seconds) / timeConstant));
-    }
-
-    private static double[] unit(double[] v)
-    {
-        double length = Math.sqrt(dot(v, v));
-        return length < 1e-9 ? new double[]{0, 0, -1} : scale(v, 1 / length);
-    }
-
-    private static double dot(double[] a, double[] b)
-    {
-        return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
-    }
-
-    private static double[] minus(double[] a, double[] b)
-    {
-        return new double[]{a[0] - b[0], a[1] - b[1], a[2] - b[2]};
-    }
-
-    private static double[] scale(double[] v, double by)
-    {
-        return new double[]{v[0] * by, v[1] * by, v[2] * by};
     }
 }

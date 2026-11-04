@@ -86,6 +86,9 @@ import java.util.List;
 import java.util.Set;
 import java.util.function.Consumer;
 
+import static com.tonic.vitavr.space.Vectors.square;
+import static com.tonic.vitavr.space.Vectors.unit;
+
 /**
  * Draws the game into the headset by wrapping the GPU plugin's draw callbacks and replaying each draw for both eyes.
  */
@@ -101,8 +104,6 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
     private static final double DOT_RADIANS = Math.toRadians(0.45);
     private static final int GHOST_HAND = 0x59FFFFFF;
     private static final double HAND_METRES = 0.06;
-    private static final double STANDING_EYE_METRES = 1.65;
-    private static final double USUAL_EYE_HEIGHT = 182;
     private static final double DOT_EDGE_RADIANS = Math.toRadians(0.65);
     private static final double CROSS_RADIANS = Math.toRadians(1.3);
     private static final int DOT = 0xFFFFFFFF;
@@ -217,7 +218,7 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
     private HudPanel panel;
     private final HudPicture picture = new HudPicture();
     private final CursorDot cursor = new CursorDot();
-    private String hudShape;
+    private volatile boolean hudShapeStale = true;
     private final double[] pointerHit = new double[3];
     private boolean pointerMet;
     private int sceneFramebuffer;
@@ -370,7 +371,7 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
         else
         {
             double[] shift = ownBody.viewShift(config.headFollow());
-            boolean jumped = placement.place(headset, config, at.getX(), ground, at.getY(), ownBody.getEyeHeight(), shift, seconds);
+            boolean jumped = placement.place(headset, config, at.getX(), ground, at.getY(), ownBody.restEyeHeight(), ownBody.unitsPerMetre(), shift, seconds);
             unitsPerMetre = placement.getRoom().getUnitsPerMetre();
             comfort.step(placement.getTurnRate(), placement.groundSpeed() / unitsPerMetre, jumped, seconds);
         }
@@ -389,8 +390,7 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
         centre.forward(forward);
         double[] head = {centre.eyeX(), centre.eyeY(), centre.eyeZ()};
         headProjection = new EyeProjection(head, right, down, forward);
-        double bodyEyeHeight = Double.isNaN(ownBody.getEyeHeight()) ? USUAL_EYE_HEIGHT : ownBody.getEyeHeight();
-        double bodyScale = bodyEyeHeight / STANDING_EYE_METRES / unitsPerMetre;
+        double bodyScale = ownBody.unitsPerMetre() / unitsPerMetre;
         ownBody.look(config.heldItems(), config.heldItemPercent(), config.fadeNearEyes(), config.hideOwnHead());
         ownBody.frame(centre.yaw(), head, trackedHand(Controllers.RIGHT, head, bodyScale), trackedHand(Controllers.LEFT, head, bodyScale), seconds);
         frameBodyScale = bodyScale;
@@ -455,6 +455,7 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
      */
     public void settingsChanged()
     {
+        hudShapeStale = true;
         RoomPanel shown = settingsPanel;
         if (shown != null)
         {
@@ -608,11 +609,27 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
         {
             return false;
         }
-        double left = (zoneX - ZONE_OFFSET) * ZONE_UNITS;
-        double bottom = (zoneZ - ZONE_OFFSET) * ZONE_UNITS;
+        double left = zoneEdge(zoneX);
+        double bottom = zoneEdge(zoneZ);
         double dx = Math.max(0, Math.max(left - placement.anchorX(), placement.anchorX() - (left + ZONE_UNITS)));
         double dz = Math.max(0, Math.max(bottom - placement.anchorZ(), placement.anchorZ() - (bottom + ZONE_UNITS)));
         return dx * dx + dz * dz > tableReach * tableReach;
+    }
+
+    /**
+     * Gets a zone's west or south edge in the scene.
+     */
+    private static double zoneEdge(int zone)
+    {
+        return (zone - ZONE_OFFSET) * (double) ZONE_UNITS;
+    }
+
+    /**
+     * Gets the zone a scene coordinate lies in.
+     */
+    private static int zoneOf(double at)
+    {
+        return (int) Math.floor(at / ZONE_UNITS) + ZONE_OFFSET;
     }
 
     /**
@@ -669,8 +686,8 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
         double[] forward = new double[3];
         aimed.forward(forward);
         double level = Math.hypot(forward[0], forward[2]);
-        double dx = (zoneX - ZONE_OFFSET + 0.5) * ZONE_UNITS - aimed.eyeX();
-        double dz = (zoneZ - ZONE_OFFSET + 0.5) * ZONE_UNITS - aimed.eyeZ();
+        double dx = zoneEdge(zoneX) + ZONE_UNITS / 2.0 - aimed.eyeX();
+        double dz = zoneEdge(zoneZ) + ZONE_UNITS / 2.0 - aimed.eyeZ();
         if (level < 1e-6)
         {
             return dx * dx + dz * dz < PROBE_ZONE_REACH * PROBE_ZONE_REACH;
@@ -777,8 +794,7 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
             return;
         }
         double[] at = new double[3];
-        placement.getRoom().room(pointerHit[0], pointerHit[1], pointerHit[2], at);
-        at[1] -= placement.getLift();
+        placement.toRoom(pointerHit[0], pointerHit[1], pointerHit[2], at);
         Pose head = rawHead();
         double dx = at[0] - head.x();
         double dy = at[1] - head.y();
@@ -882,13 +898,11 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
             int chat = CHAT_SIDE_PIXELS * Math.min(width, HUD_CANVAS_WIDTH) / HUD_CANVAS_WIDTH;
             int inventory = INVENTORY_SIDE_PIXELS * Math.min(width, HUD_CANVAS_WIDTH) / HUD_CANVAS_WIDTH;
             panel = new HudPanel(headset.getSession(), headset.getRoom(), width, height, chat, inventory, headset.isCylinders());
-            hudShape = null;
+            hudShapeStale = true;
         }
-        String shape = config.hudDistance() + "/" + config.hudSizePercent() + "/" + config.chatSidePercent() + "/" + config.inventorySidePercent() + "/"
-                + config.sidesApartDegrees();
-        if (!shape.equals(hudShape))
+        if (hudShapeStale)
         {
-            hudShape = shape;
+            hudShapeStale = false;
             panel.shape(config.hudDistance(), HUD_PIXEL_RADIANS * config.hudSizePercent() / 100.0, config.chatSidePercent() / 100.0,
                     config.inventorySidePercent() / 100.0, Math.toRadians(config.sidesApartDegrees()));
         }
@@ -926,7 +940,7 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
             return null;
         }
         double[] at = new double[3];
-        placement.getRoom().point(held.x(), held.y() + placement.getLift(), held.z(), at);
+        placement.toWorld(held.x(), held.y(), held.z(), at);
         return at;
     }
 
@@ -953,22 +967,11 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
      */
     private double[] worldDirection(Pose pose, double x, double y, double z)
     {
-        double[] direction = new double[3];
-        pose.rotate(x, y, z, direction);
-        double[] from = new double[3];
-        double[] to = new double[3];
-        placement.getRoom().point(pose.x(), pose.y(), pose.z(), from);
-        placement.getRoom().point(pose.x() + direction[0], pose.y() + direction[1], pose.z() + direction[2], to);
-        double dx = to[0] - from[0];
-        double dy = to[1] - from[1];
-        double dz = to[2] - from[2];
-        double length = Math.max(1e-9, Math.sqrt(dx * dx + dy * dy + dz * dz));
-        return new double[]{dx / length, dy / length, dz / length};
-    }
-
-    private static double square(double value)
-    {
-        return value * value;
+        double[] inRoom = new double[3];
+        pose.rotate(x, y, z, inRoom);
+        double[] inWorld = new double[3];
+        placement.getRoom().direction(inRoom[0], inRoom[1], inRoom[2], inWorld);
+        return inWorld;
     }
 
     /**
@@ -976,9 +979,7 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
      */
     private Pose rawHead()
     {
-        Pose left = headset.eyePose(0);
-        Pose right = headset.eyePose(1);
-        return new Pose((left.x() + right.x()) / 2, (left.y() + right.y()) / 2, (left.z() + right.z()) / 2, left.qx(), left.qy(), left.qz(), left.qw());
+        return Pose.between(headset.eyePose(0), headset.eyePose(1));
     }
 
     /**
@@ -1049,22 +1050,12 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
         }
         RoomToWorld room = placement.getRoom();
         double[] at = new double[3];
-        double[] alongEnd = new double[3];
-        double[] outEnd = new double[3];
-        double[] point = wristAt[0];
-        room.room(point[0], point[1], point[2], at);
-        room.room(point[0] + wristAt[1][0], point[1] + wristAt[1][1], point[2] + wristAt[1][2], alongEnd);
-        room.room(point[0] + wristAt[2][0], point[1] + wristAt[2][1], point[2] + wristAt[2][2], outEnd);
-        double[] along = unit(alongEnd[0] - at[0], alongEnd[1] - at[1], alongEnd[2] - at[2]);
-        double[] out = unit(outEnd[0] - at[0], outEnd[1] - at[1], outEnd[2] - at[2]);
-        at[1] -= placement.getLift();
-        wrist.placeOn(at, along, out);
-    }
-
-    private static double[] unit(double x, double y, double z)
-    {
-        double length = Math.max(1e-9, Math.sqrt(x * x + y * y + z * z));
-        return new double[]{x / length, y / length, z / length};
+        double[] along = new double[3];
+        double[] out = new double[3];
+        placement.toRoom(wristAt[0][0], wristAt[0][1], wristAt[0][2], at);
+        room.roomDirection(wristAt[1][0], wristAt[1][1], wristAt[1][2], along);
+        room.roomDirection(wristAt[2][0], wristAt[2][1], wristAt[2][2], out);
+        wrist.placeOn(at, unit(along), unit(out));
     }
 
     /**
@@ -1174,11 +1165,10 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
         {
             return;
         }
-        Pose head = rawHead();
-        head = new Pose(head.x(), head.y() + placement.getLift(), head.z(), head.qx(), head.qy(), head.qz(), head.qw());
+        Pose head = rawHead().lifted(placement.getLift());
         if (!tabletop)
         {
-            head = clearedHead(head, config.headClearanceCm() / 100.0 / frameBodyScale);
+            head = head.ahead(config.headClearanceCm() / 100.0 / frameBodyScale);
         }
         float[] matrix = recording.follow(head, seconds, placement.getRoom());
         if (recordingDue)
@@ -1186,21 +1176,6 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
             spectatorMatrix = matrix;
             spectating = true;
         }
-    }
-
-    /**
-     * Gets a head moved forward along its level facing, in metres.
-     */
-    private static Pose clearedHead(Pose head, double metres)
-    {
-        double[] forward = new double[3];
-        head.rotate(0, 0, -1, forward);
-        double level = Math.hypot(forward[0], forward[2]);
-        if (level < 1e-6)
-        {
-            return head;
-        }
-        return new Pose(head.x() + forward[0] / level * metres, head.y(), head.z() + forward[2] / level * metres, head.qx(), head.qy(), head.qz(), head.qw());
     }
 
     /**
@@ -1237,23 +1212,13 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
             recording.interfaces(picture.getPixels());
             double[][][] all = panel.strips();
             double[][] allAcross = panel.stripsAcross();
-            double from = config.recordHideChat() ? panel.chatSideEnd() - 1e-9 : -1;
-            int kept = 0;
-            for (double[] strip : allAcross)
+            int[] kept = panel.stripsFrom(config.recordHideChat() ? panel.chatSideEnd() : 0);
+            strips = new double[kept.length][][];
+            across = new double[kept.length][];
+            for (int strip = 0; strip < kept.length; strip++)
             {
-                kept += strip[0] >= from ? 1 : 0;
-            }
-            strips = new double[kept][][];
-            across = new double[kept][];
-            int at = 0;
-            for (int strip = 0; strip < all.length; strip++)
-            {
-                if (allAcross[strip][0] >= from)
-                {
-                    strips[at] = inWorld(all[strip]);
-                    across[at] = allAcross[strip];
-                    at++;
-                }
+                strips[strip] = inWorld(all[kept[strip]]);
+                across[strip] = allAcross[kept[strip]];
             }
         }
 
@@ -1301,7 +1266,7 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
         for (int corner = 0; corner < roomCorners.length; corner++)
         {
             double[] at = roomCorners[corner];
-            placement.getRoom().point(at[0], at[1] + placement.getLift(), at[2], placed[corner]);
+            placement.toWorld(at[0], at[1], at[2], placed[corner]);
         }
         return placed;
     }
@@ -1528,8 +1493,8 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
         {
             return false;
         }
-        int playerZoneX = (int) Math.floor(placement.anchorX() / ZONE_UNITS) + ZONE_OFFSET;
-        int playerZoneZ = (int) Math.floor(placement.anchorZ() / ZONE_UNITS) + ZONE_OFFSET;
+        int playerZoneX = zoneOf(placement.anchorX());
+        int playerZoneZ = zoneOf(placement.anchorZ());
         return Math.abs(zoneX - playerZoneX) <= CEILING_ZONES && Math.abs(zoneZ - playerZoneZ) <= CEILING_ZONES;
     }
 

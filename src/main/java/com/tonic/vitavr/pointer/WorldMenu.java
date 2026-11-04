@@ -5,6 +5,8 @@ import com.tonic.vitavr.space.Billboard;
 import com.tonic.vitavr.space.Pose;
 import lombok.Getter;
 
+import static com.tonic.vitavr.space.Vectors.square;
+
 /**
  * A right-click menu cropped from the HUD picture and placed on the pointer where it was opened.
  */
@@ -154,10 +156,5 @@ public final class WorldMenu
     double reach(Pose held)
     {
         return state == State.OPEN ? board.reach(held) : Double.POSITIVE_INFINITY;
-    }
-
-    private static double square(double value)
-    {
-        return value * value;
     }
 }
