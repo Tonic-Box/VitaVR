@@ -1,2 +1,1 @@
-rootProject.name = "ExampleVitaPlugin"
-
+rootProject.name = "VitaVR"
