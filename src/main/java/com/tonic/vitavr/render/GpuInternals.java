@@ -6,12 +6,17 @@ import net.runelite.api.WorldView;
 import net.runelite.api.hooks.DrawCallbacks;
 import net.runelite.client.plugins.gpu.GpuPluginConfig;
 
+import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.MethodType;
 import java.lang.reflect.Array;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -25,11 +30,10 @@ final class GpuInternals
     private final Object gpu;
     private final Field renderThreads;
     private final Field opaqueList;
-    private final Field uploader;
-    private final Method unmap;
     private final Field vaos;
-    private final Method vaoDraw;
-    private final Method vaoReset;
+    private final MethodHandle unmap;
+    private final MethodHandle vaoDraw;
+    private final MethodHandle vaoReset;
     private final Method context;
     private final Field zones;
     private final Field cameraX;
@@ -39,11 +43,14 @@ final class GpuInternals
     private final Field level;
     private final Field maxLevel;
     private final Field hideRoofIds;
-    private final Field initialized;
-    private final Method renderAlpha;
+    private final MethodHandle initialized;
+    private final MethodHandle renderAlpha;
     private final Field cameraYaw;
     private final Field cameraPitch;
+    private final Field uploader;
+    private Object firstUploader;
     private final List<Object> opaque = new ArrayList<>();
+    private final Map<Scene, SceneState> scenes = new IdentityHashMap<>();
 
     /**
      * Looks up the GPU plugin internals.
@@ -67,11 +74,10 @@ final class GpuInternals
 
             renderThreads = field(plugin, "rts");
             opaqueList = field(renderThread, "vaoO");
-            uploader = field(renderThread, "modelUploader");
-            unmap = method(vaoList, "unmap");
             vaos = field(vaoList, "vaos");
-            vaoDraw = method(vao, "draw");
-            vaoReset = method(vao, "reset");
+            unmap = handle(method(vaoList, "unmap"), MethodType.methodType(int.class, Object.class));
+            vaoDraw = handle(method(vao, "draw"), MethodType.methodType(void.class, Object.class));
+            vaoReset = handle(method(vao, "reset"), MethodType.methodType(void.class, Object.class));
             context = method(plugin, "context", Scene.class);
             zones = field(sceneContext, "zones");
             cameraX = field(sceneContext, "cameraX");
@@ -81,10 +87,13 @@ final class GpuInternals
             level = field(sceneContext, "level");
             maxLevel = field(sceneContext, "maxLevel");
             hideRoofIds = field(sceneContext, "hideRoofIds");
-            initialized = field(zone, "initialized");
-            renderAlpha = method(zone, "renderAlpha", modelUploader, int.class, int.class, int.class, int.class, int.class, int.class, int.class, int.class, Set.class, boolean.class);
+            initialized = MethodHandles.lookup().unreflectGetter(field(zone, "initialized")).asType(MethodType.methodType(boolean.class, Object.class));
+            renderAlpha = handle(method(zone, "renderAlpha", modelUploader, int.class, int.class, int.class, int.class, int.class, int.class, int.class, int.class, Set.class,
+                    boolean.class), MethodType.methodType(void.class, Object.class, Object.class, int.class, int.class, int.class, int.class, int.class, int.class, int.class,
+                    int.class, Set.class, boolean.class));
             cameraYaw = field(plugin, "cameraYaw");
             cameraPitch = field(plugin, "cameraPitch");
+            uploader = field(renderThread, "modelUploader");
         }
         catch (ReflectiveOperationException | RuntimeException e)
         {
@@ -110,18 +119,41 @@ final class GpuInternals
     }
 
     /**
+     * Reads a scene's draw state for this frame; the top level scene clears all earlier ones.
+     *
+     * @param scene The scene just set up.
+     */
+    void prepare(Scene scene)
+    {
+        if (scene.getWorldViewId() == WorldView.TOPLEVEL)
+        {
+            scenes.clear();
+            firstUploader = get(uploader, Array.get(get(renderThreads, gpu), 0));
+        }
+        scenes.remove(scene);
+        state(scene);
+    }
+
+    /**
      * Takes the frame's dynamic opaque models from the GPU plugin so they can be drawn for each eye.
      */
     void takeOpaque()
     {
         opaque.clear();
         Object threads = get(renderThreads, gpu);
-        for (int i = 0; i < Array.getLength(threads); i++)
+        try
         {
-            Object list = get(opaqueList, Array.get(threads, i));
-            int mapped = (int) invoke(unmap, list);
-            List<?> all = (List<?>) get(vaos, list);
-            opaque.addAll(all.subList(0, mapped));
+            for (int i = 0; i < Array.getLength(threads); i++)
+            {
+                Object list = get(opaqueList, Array.get(threads, i));
+                int mapped = (int) unmap.invokeExact(list);
+                List<?> all = (List<?>) get(vaos, list);
+                opaque.addAll(all.subList(0, mapped));
+            }
+        }
+        catch (Throwable e)
+        {
+            throw rethrown(e);
         }
     }
 
@@ -130,9 +162,16 @@ final class GpuInternals
      */
     void drawOpaque()
     {
-        for (Object vao : opaque)
+        try
         {
-            invoke(vaoDraw, vao);
+            for (int i = 0; i < opaque.size(); i++)
+            {
+                vaoDraw.invokeExact(opaque.get(i));
+            }
+        }
+        catch (Throwable e)
+        {
+            throw rethrown(e);
         }
     }
 
@@ -141,9 +180,16 @@ final class GpuInternals
      */
     void resetOpaque()
     {
-        for (Object vao : opaque)
+        try
         {
-            invoke(vaoReset, vao);
+            for (int i = 0; i < opaque.size(); i++)
+            {
+                vaoReset.invokeExact(opaque.get(i));
+            }
+        }
+        catch (Throwable e)
+        {
+            throw rethrown(e);
         }
         opaque.clear();
     }
@@ -160,28 +206,18 @@ final class GpuInternals
      */
     void sortFrom(Scene scene, double x, double y, double z, double yaw, double pitch)
     {
-        Object sceneContext = invoke(context, gpu, scene);
-        if (sceneContext == null)
+        SceneState state = state(scene);
+        if (state == null)
         {
             return;
         }
-        set(cameraX, sceneContext, (int) Math.round(x));
-        set(cameraY, sceneContext, (int) Math.round(y));
-        set(cameraZ, sceneContext, (int) Math.round(z));
-        set(cameraYaw, gpu, Math.floorMod((int) Math.round(yaw * 2048 / (2 * Math.PI)), 2048));
-        set(cameraPitch, gpu, Math.floorMod((int) Math.round(pitch * 2048 / (2 * Math.PI)), 2048));
-    }
-
-    /**
-     * Gets the levels a scene's zones are drawn from this frame.
-     *
-     * @param scene The scene.
-     * @return The lowest then the highest level, or null before the scene is drawn.
-     */
-    int[] levels(Scene scene)
-    {
-        Object sceneContext = invoke(context, gpu, scene);
-        return sceneContext == null ? null : new int[]{(int) get(minLevel, sceneContext), (int) get(maxLevel, sceneContext)};
+        state.cameraX = (int) Math.round(x);
+        state.cameraZ = (int) Math.round(z);
+        setInt(cameraX, state.context, state.cameraX);
+        setInt(cameraY, state.context, (int) Math.round(y));
+        setInt(cameraZ, state.context, state.cameraZ);
+        setInt(cameraYaw, gpu, Math.floorMod((int) Math.round(yaw * 2048 / (2 * Math.PI)), 2048));
+        setInt(cameraPitch, gpu, Math.floorMod((int) Math.round(pitch * 2048 / (2 * Math.PI)), 2048));
     }
 
     /**
@@ -193,11 +229,13 @@ final class GpuInternals
      */
     void levels(Scene scene, int lowest, int highest)
     {
-        Object sceneContext = invoke(context, gpu, scene);
-        if (sceneContext != null)
+        SceneState state = state(scene);
+        if (state != null)
         {
-            set(minLevel, sceneContext, lowest);
-            set(maxLevel, sceneContext, highest);
+            state.minLevel = lowest;
+            state.maxLevel = highest;
+            setInt(minLevel, state.context, lowest);
+            setInt(maxLevel, state.context, highest);
         }
     }
 
@@ -211,25 +249,90 @@ final class GpuInternals
      */
     void drawZoneAlphaAgain(Scene scene, int zoneLevel, int zoneX, int zoneZ)
     {
-        Object sceneContext = invoke(context, gpu, scene);
-        if (sceneContext == null)
+        SceneState state = state(scene);
+        if (state == null)
         {
             return;
         }
-        Object zone = Array.get(Array.get(get(zones, sceneContext), zoneX), zoneZ);
-        if (!(boolean) get(initialized, zone))
+        Object zone = state.zones[zoneX][zoneZ];
+        if (!isInitialized(zone))
         {
             return;
         }
 
-        int offset = scene.getWorldViewId() == WorldView.TOPLEVEL ? (SCENE_OFFSET >> 3) : 0;
-        int dx = (int) get(cameraX, sceneContext) - ((zoneX - offset) << 10);
-        int dz = (int) get(cameraZ, sceneContext) - ((zoneZ - offset) << 10);
+        int dx = state.cameraX - ((zoneX - state.offset) << 10);
+        int dz = state.cameraZ - ((zoneZ - state.offset) << 10);
         boolean close = dx * dx + dz * dz < ALPHA_ZSORT_CLOSE * ALPHA_ZSORT_CLOSE;
-        Object firstThread = Array.get(get(renderThreads, gpu), 0);
-        invoke(renderAlpha, zone, get(uploader, firstThread), zoneX - offset, zoneZ - offset, get(cameraYaw, gpu), get(cameraPitch, gpu),
-                get(minLevel, sceneContext), get(level, sceneContext), get(maxLevel, sceneContext), zoneLevel, get(hideRoofIds, sceneContext),
-                !close || scene.getOverrideAmount() > 0);
+        try
+        {
+            renderAlpha.invokeExact(zone, firstUploader, zoneX - state.offset, zoneZ - state.offset, getInt(cameraYaw, gpu), getInt(cameraPitch, gpu),
+                    state.minLevel, state.level, state.maxLevel, zoneLevel, state.roofs, !close || scene.getOverrideAmount() > 0);
+        }
+        catch (Throwable e)
+        {
+            throw rethrown(e);
+        }
+    }
+
+    /**
+     * Gets a scene's state for this frame, reading it if not seen yet.
+     */
+    private SceneState state(Scene scene)
+    {
+        SceneState state = scenes.get(scene);
+        if (state == null)
+        {
+            state = read(scene);
+            if (state != null)
+            {
+                scenes.put(scene, state);
+            }
+        }
+        return state;
+    }
+
+    private SceneState read(Scene scene)
+    {
+        Object sceneContext;
+        try
+        {
+            sceneContext = context.invoke(gpu, scene);
+        }
+        catch (IllegalAccessException e)
+        {
+            throw new IllegalStateException(e);
+        }
+        catch (InvocationTargetException e)
+        {
+            throw rethrown(e.getCause());
+        }
+        if (sceneContext == null)
+        {
+            return null;
+        }
+        SceneState state = new SceneState();
+        state.context = sceneContext;
+        state.zones = (Object[][]) get(zones, sceneContext);
+        state.minLevel = getInt(minLevel, sceneContext);
+        state.level = getInt(level, sceneContext);
+        state.maxLevel = getInt(maxLevel, sceneContext);
+        state.roofs = (Set<?>) get(hideRoofIds, sceneContext);
+        state.cameraX = getInt(cameraX, sceneContext);
+        state.cameraZ = getInt(cameraZ, sceneContext);
+        state.offset = scene.getWorldViewId() == WorldView.TOPLEVEL ? (SCENE_OFFSET >> 3) : 0;
+        return state;
+    }
+
+    private boolean isInitialized(Object zone)
+    {
+        try
+        {
+            return (boolean) initialized.invokeExact(zone);
+        }
+        catch (Throwable e)
+        {
+            throw rethrown(e);
+        }
     }
 
     private static Field field(Class<?> owner, String name) throws NoSuchFieldException
@@ -246,6 +349,14 @@ final class GpuInternals
         return method;
     }
 
+    /**
+     * Gets a method as a handle adapted to the given Object-based type.
+     */
+    private static MethodHandle handle(Method method, MethodType as) throws IllegalAccessException
+    {
+        return MethodHandles.lookup().unreflect(method).asType(as);
+    }
+
     private static Object get(Field field, Object owner)
     {
         try
@@ -258,7 +369,19 @@ final class GpuInternals
         }
     }
 
-    private static void set(Field field, Object owner, int value)
+    private static int getInt(Field field, Object owner)
+    {
+        try
+        {
+            return field.getInt(owner);
+        }
+        catch (IllegalAccessException e)
+        {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    private static void setInt(Field field, Object owner, int value)
     {
         try
         {
@@ -270,24 +393,32 @@ final class GpuInternals
         }
     }
 
-    private static Object invoke(Method method, Object owner, Object... arguments)
+    private static RuntimeException rethrown(Throwable e)
     {
-        try
+        if (e instanceof RuntimeException)
         {
-            return method.invoke(owner, arguments);
+            return (RuntimeException) e;
         }
-        catch (IllegalAccessException e)
+        if (e instanceof Error)
         {
-            throw new IllegalStateException(e);
+            throw (Error) e;
         }
-        catch (InvocationTargetException e)
-        {
-            Throwable cause = e.getCause();
-            if (cause instanceof RuntimeException)
-            {
-                throw (RuntimeException) cause;
-            }
-            throw new IllegalStateException(cause);
-        }
+        return new IllegalStateException(e);
+    }
+
+    /**
+     * A scene's draw state for this frame, read once instead of per zone.
+     */
+    private static final class SceneState
+    {
+        private Object context;
+        private Object[][] zones;
+        private int minLevel;
+        private int level;
+        private int maxLevel;
+        private Set<?> roofs;
+        private int cameraX;
+        private int cameraZ;
+        private int offset;
     }
 }

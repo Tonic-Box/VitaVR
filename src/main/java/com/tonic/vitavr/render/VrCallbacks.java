@@ -191,6 +191,7 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
     private Recording recording;
     private boolean recordingTried;
     private int ceilingsFrom = NO_CEILINGS;
+    private int ceilingsMinLevel;
     private boolean recordingDue;
     private long lastPacedNanos;
     private double frameBodyScale = 1;
@@ -1537,11 +1538,6 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
      */
     private void drawCeilings(Projection projection, Scene scene, int zoneX, int zoneZ)
     {
-        int[] levels = internals.levels(scene);
-        if (levels == null)
-        {
-            return;
-        }
         float light = config.ceilingLightPercent() / 100f;
         internals.levels(scene, ceilingsFrom, TOP_LEVEL);
         GL11.glCullFace(GL11.GL_FRONT);
@@ -1555,7 +1551,7 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
         {
             GL11.glCullFace(GL11.GL_BACK);
             GL14.glBlendFuncSeparate(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA, GL11.GL_ONE, GL11.GL_ONE);
-            internals.levels(scene, levels[0], levels[1]);
+            internals.levels(scene, ceilingsMinLevel, TOP_LEVEL);
         }
     }
 
@@ -1582,9 +1578,17 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
         }
         // Kept roofs draw every level up to the top
         boolean keep = toplevel && keepRoofs();
-        ceilingsFrom = keep && level < TOP_LEVEL ? level + 1 : NO_CEILINGS;
+        if (toplevel)
+        {
+            ceilingsFrom = keep && level < TOP_LEVEL ? level + 1 : NO_CEILINGS;
+            ceilingsMinLevel = minLevel;
+        }
         Set<Integer> roofs = keep ? Collections.emptySet() : hideRoofIds;
         gpu.preSceneDraw(scene, entityProjection, cameraX, cameraY, cameraZ, cameraPitch, cameraYaw, minLevel, level, keep ? TOP_LEVEL : maxLevel, roofs);
+        if (internals != null)
+        {
+            safely(() -> internals.prepare(scene));
+        }
         if (toplevel && placed)
         {
             safely(() ->
