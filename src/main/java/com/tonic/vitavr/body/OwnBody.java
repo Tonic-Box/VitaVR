@@ -54,6 +54,7 @@ public final class OwnBody
     private double[] restHead;
     private BodyParts parts;
     private int measured;
+    private boolean measuredWithSlots;
     private final double[] headMoved = new double[3];
     private final double[] viewShift = new double[3];
     private boolean acting;
@@ -246,23 +247,29 @@ public final class OwnBody
     private void measure(Player player, Model model, int[][] groups)
     {
         PlayerComposition composition = player.getPlayerComposition();
+        int key = appearance(composition, model);
+        if (key == measured && parts != null && measuredWithSlots || acting || moving)
+        {
+            return;
+        }
+        // Read slot faces for a new look, or until they are available
         int[] slotFaces = composition == null ? null : ((TPlayerComposition) composition).getSlotFaces();
-        int key = appearance(composition, model, slotFaces);
-        if (key == measured && parts != null || acting || moving)
+        if (key == measured && parts != null && slotFaces == null)
         {
             return;
         }
         measured = key;
+        measuredWithSlots = slotFaces != null;
         double[] head = centroid(model, groups, HEAD);
         eyeHeight = head == null || head[1] >= 0 ? USUAL_EYE_HEIGHT : -head[1];
         restHead = head;
         parts = BodyParts.of(model, groups, slotFaces);
     }
 
-    private static int appearance(PlayerComposition composition, Model model, int[] slotFaces)
+    private static int appearance(PlayerComposition composition, Model model)
     {
         int equipment = composition == null ? 0 : Arrays.hashCode(composition.getEquipmentIds());
-        return ((equipment * 31 + model.getVerticesCount()) * 31 + model.getFaceCount()) * 31 + Arrays.hashCode(slotFaces);
+        return (equipment * 31 + model.getVerticesCount()) * 31 + model.getFaceCount();
     }
 
     /**
