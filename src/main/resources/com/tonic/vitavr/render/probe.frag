@@ -18,10 +18,27 @@ float along(float u)
     return u * start.w / ((1.0 - u) * end.w + u * start.w);
 }
 
+vec4 at(float u)
+{
+    return mix(start, end, along(u));
+}
+
+float storedAt(vec4 clip)
+{
+    return texelFetch(depths, ivec2(clamp((clip.xy / clip.w * 0.5 + 0.5) * size, vec2(0.0), size - 1.0)), 0).r;
+}
+
+bool inFront(float u)
+{
+    vec4 clip = at(u);
+    float stored = storedAt(clip);
+    return stored <= 0.0 || clip.z / clip.w > stored;
+}
+
 bool behind(float u)
 {
-    vec4 clip = mix(start, end, along(u));
-    float stored = texelFetch(depths, ivec2(clamp((clip.xy / clip.w * 0.5 + 0.5) * size, vec2(0.0), size - 1.0)), 0).r;
+    vec4 clip = at(u);
+    float stored = storedAt(clip);
     float ray = clip.z / clip.w;
     if (stored <= 0.0 || ray > stored)
     {
@@ -36,10 +53,17 @@ void main()
     vec2 from = (start.xy / start.w * 0.5 + 0.5) * size;
     vec2 to = (end.xy / end.w * 0.5 + 0.5) * size;
     int steps = int(clamp(ceil(length(to - from)), 1.0, float(MOST_STEPS)));
+    // Only a ray seen in front of the depth first can hit, so one starting inside the arm passes through it
+    bool seen = inFront(0.0);
     for (int step = 1; step <= steps; step++)
     {
         float u = float(step) / float(steps);
-        if (!behind(u))
+        if (inFront(u))
+        {
+            seen = true;
+            continue;
+        }
+        if (!seen || !behind(u))
         {
             continue;
         }
@@ -50,13 +74,13 @@ void main()
         for (int refine = 0; refine < REFINE_STEPS; refine++)
         {
             float middle = (low + high) * 0.5;
-            if (behind(middle))
+            if (inFront(middle))
             {
-                high = middle;
+                low = middle;
             }
             else
             {
-                low = middle;
+                high = middle;
             }
         }
         found = mix(span.x, span.y, along(high));
