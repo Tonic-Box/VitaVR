@@ -1,6 +1,6 @@
-package com.tonic.vitavr.render;
+package com.tonic.vitavr.render.scene.gpu;
 
-import net.runelite.api.Constants;
+import com.tonic.vitavr.world.Zones;
 import net.runelite.api.Scene;
 import net.runelite.api.WorldView;
 import net.runelite.api.hooks.DrawCallbacks;
@@ -22,14 +22,9 @@ import java.util.Set;
 /**
  * Reflective access to the GPU plugin internals needed to draw both eyes from one scene walk.
  */
-public final class GpuInternals
+final class GpuInternals
 {
-    private static final int SCENE_OFFSET = (Constants.EXTENDED_SCENE_SIZE - Constants.SCENE_SIZE) / 2;
     private static final int ALPHA_ZSORT_CLOSE = 2048;
-    /** The offset of the scene's own zones into the extended scene, in zones. */
-    static final int ZONE_OFFSET = SCENE_OFFSET >> 3;
-    /** The width of a zone, in game units. */
-    static final int ZONE_UNITS = 1024;
 
     private final Object gpu;
     private final Field renderThreads;
@@ -122,28 +117,6 @@ public final class GpuInternals
                 | DrawCallbacks.ZBUF
                 | DrawCallbacks.RENDER_THREADS(threads)
                 | (allZones ? DrawCallbacks.ZBUF_ZONE_FRUSTUM_CHECK : 0);
-    }
-
-    /**
-     * Gets the west or south edge of a zone.
-     *
-     * @param zone The zone index in the extended scene.
-     * @return The edge, in game units.
-     */
-    static double zoneEdge(int zone)
-    {
-        return (zone - ZONE_OFFSET) * (double) ZONE_UNITS;
-    }
-
-    /**
-     * Gets the zone a scene coordinate lies in.
-     *
-     * @param at The coordinate, in game units.
-     * @return The zone index in the extended scene.
-     */
-    public static int zoneOf(double at)
-    {
-        return (int) Math.floor(at / ZONE_UNITS) + ZONE_OFFSET;
     }
 
     /**
@@ -255,7 +228,7 @@ public final class GpuInternals
      * @param lowest The lowest level drawn.
      * @param highest The highest level drawn.
      */
-    public void levels(Scene scene, int lowest, int highest)
+    void levels(Scene scene, int lowest, int highest)
     {
         SceneState state = state(scene);
         if (state != null)
@@ -311,7 +284,7 @@ public final class GpuInternals
      * @param from The lowest level checked.
      * @return Whether the zone has faces on that level or above.
      */
-    public boolean hasFacesFrom(Scene scene, int zoneX, int zoneZ, int from)
+    boolean hasFacesFrom(Scene scene, int zoneX, int zoneZ, int from)
     {
         SceneState state = state(scene);
         if (state == null)
@@ -373,7 +346,7 @@ public final class GpuInternals
         state.roofs = (Set<?>) get(hideRoofIds, sceneContext);
         state.cameraX = getInt(cameraX, sceneContext);
         state.cameraZ = getInt(cameraZ, sceneContext);
-        state.offset = scene.getWorldViewId() == WorldView.TOPLEVEL ? (SCENE_OFFSET >> 3) : 0;
+        state.offset = scene.getWorldViewId() == WorldView.TOPLEVEL ? Zones.OFFSET : 0;
         return state;
     }
 

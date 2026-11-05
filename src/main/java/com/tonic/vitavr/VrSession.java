@@ -3,6 +3,7 @@ package com.tonic.vitavr;
 import com.tonic.Logger;
 import com.tonic.services.WorldOverlays;
 import com.tonic.vitavr.render.VrCallbacks;
+import com.tonic.vitavr.render.scene.gpu.GpuScene;
 import lombok.Getter;
 import lombok.Setter;
 import net.runelite.api.Actor;
@@ -45,13 +46,6 @@ public class VrSession
     private static final String GPU = "net.runelite.client.plugins.gpu.GpuPlugin";
     private static final String HD = "rs117.hd.HdPlugin";
 
-    /** Settings overridden while in VR, as group, key and VR value. */
-    private static final String[][] VR_SETTINGS = {
-            // The headset paces the client, so no vsync or frame cap
-            {"gpu", "unlockFps", "true"},
-            {"gpu", "syncMode", "OFF"},
-            {"gpu", "fpsTarget", "0"},
-    };
     private static final String RUNELITE_GROUP = "runelite";
     private static final String GAME_SIZE = "gameSize";
     private static final DateTimeFormatter SAVED_STAMP = DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss");
@@ -116,7 +110,7 @@ public class VrSession
         }
 
         override(RUNELITE_GROUP, GAME_SIZE, config.hudCanvasWidth() + "x" + config.hudCanvasHeight());
-        for (String[] setting : VR_SETTINGS)
+        for (String[] setting : GpuScene.VR_SETTINGS)
         {
             override(setting[0], setting[1], setting[2]);
         }
@@ -173,7 +167,17 @@ public class VrSession
             ended("The GPU plugin did not start");
             return;
         }
-        callbacks = new VrCallbacks(gpu, client, config, configManager.getConfig(GpuPluginConfig.class), configManager, this::ended);
+        GpuScene renderer;
+        try
+        {
+            renderer = new GpuScene(gpu, client, configManager.getConfig(GpuPluginConfig.class));
+        }
+        catch (IllegalStateException e)
+        {
+            ended(e.getMessage());
+            return;
+        }
+        callbacks = new VrCallbacks(renderer, client, config, configManager, this::ended);
         client.setDrawCallbacks(callbacks);
         callbacks.applyFlags();
         WorldOverlays.setHidden(true);
@@ -193,7 +197,7 @@ public class VrSession
         renderCallbacks.unregister(noFlatOverheads);
         if (client.getDrawCallbacks() == callbacks)
         {
-            client.setDrawCallbacks(callbacks.getGpu());
+            client.setDrawCallbacks(callbacks.getRenderer().plugin());
             callbacks.restoreFlags();
         }
         callbacks.close();

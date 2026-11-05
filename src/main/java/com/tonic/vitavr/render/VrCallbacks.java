@@ -22,11 +22,14 @@ import com.tonic.vitavr.render.draw.Beams;
 import com.tonic.vitavr.render.draw.Markers;
 import com.tonic.vitavr.render.draw.PictureQuad;
 import com.tonic.vitavr.render.recording.Recording;
+import com.tonic.vitavr.render.scene.SceneRenderer;
+import com.tonic.vitavr.render.scene.SceneViews;
 import com.tonic.vitavr.space.Pose;
 import com.tonic.vitavr.space.RoomToWorld;
 import com.tonic.vitavr.space.View;
 import com.tonic.vitavr.space.placement.Placement;
 import com.tonic.vitavr.world.Roofs;
+import com.tonic.vitavr.world.Zones;
 import com.tonic.vitavr.world.body.OwnBody;
 import com.tonic.vitavr.world.body.TrackedHand;
 import com.tonic.vitavr.world.overlay.ActorOverlays;
@@ -52,13 +55,7 @@ import net.runelite.api.WorldView;
 import net.runelite.api.coords.LocalPoint;
 import net.runelite.api.hooks.DrawCallbacks;
 import net.runelite.client.config.ConfigManager;
-import net.runelite.client.plugins.gpu.GpuPluginConfig;
 import org.lwjgl.PointerBuffer;
-import org.lwjgl.opengl.GL11;
-import org.lwjgl.opengl.GL15;
-import org.lwjgl.opengl.GL20;
-import org.lwjgl.opengl.GL30;
-import org.lwjgl.opengl.GL31;
 import org.lwjgl.opengl.WGL;
 import org.lwjgl.system.MemoryStack;
 
@@ -72,13 +69,11 @@ import static com.tonic.vitavr.space.Vectors.square;
 import static com.tonic.vitavr.space.Vectors.unit;
 
 /**
- * Draws the game into the headset by wrapping the GPU plugin's draw callbacks and replaying each draw for both eyes.
+ * Draws the game into the headset by wrapping the renderer's draw callbacks, with a scene renderer getting the scene into both eyes.
  */
 public final class VrCallbacks implements DrawCallbacks, AutoCloseable
 {
     private static final int EYES = 2;
-    /** How many tiles the table's edge fades over. */
-    private static final int TABLE_FOG_TILES = 2;
     private static final int ACTIVE_BEAM = 0x40E0FFE0;
     private static final int RESTING_BEAM = 0x80A0B060;
     private static final double DOT_RADIANS = Math.toRadians(0.45);
@@ -106,10 +101,10 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
     private static final double OWN_SPLATS_BELOW_METRES = 0.12;
 
     @Getter
-    private final DrawCallbacks gpu;
+    private final SceneRenderer renderer;
+    private final DrawCallbacks plugin;
     private final Client client;
     private final VitaVRConfig config;
-    private final GpuPluginConfig gpuConfig;
     private final ConfigManager configManager;
     private final CanvasKeys keys;
     private final Consumer<String> onEnded;
@@ -119,13 +114,12 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
     private final CameraDriver cameraDriver = new CameraDriver();
     private final GlState state = new GlState();
     private final float[][] eyeMatrices = new float[EYES][];
-    private final float[] gpuWorldProj = new float[16];
     private EyeProjection headProjection;
-    private final int[] sceneViewport = new int[4];
+    private final int[] mirrorViewport = new int[4];
     private Headset headset;
     private Controllers controllers;
-    private GpuInternals internals;
     private EyesTarget eyes;
+    private SceneViews views;
     private EyeLayer eyeLayer;
     private PictureQuad quad;
     private Pointer pointer;
@@ -147,8 +141,7 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
     private long sceneFrom;
     private AtlasQuad atlas;
     private final double[] pointerHit = new double[3];
-    private final ZoneDraw zoneDraw = new ZoneDraw();
-    private final AlphaDraw alphaDraw = new AlphaDraw();
+    private final Runnable finishViews = () -> safely(this::finishEyes);
     private final double[] beamFrom = new double[3];
     private final double[] beamTo = new double[3];
     private final double[] crossAt = new double[3];
@@ -163,12 +156,6 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
     private int[] outlineColours = new int[0];
     private int outlineCount;
     private boolean pointerMet;
-    private int sceneFramebuffer;
-    private int worldProjProgram;
-    private int worldProj = -1;
-    private int useFogUniform = -1;
-    private int fogDepthUniform = -1;
-    private int drawDistanceUniform = -1;
     private boolean tabletop;
     private double tableReach;
     private long lastFrameNanos;
@@ -180,22 +167,21 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
     private boolean ended;
 
     /**
-     * Creates the VR callbacks around the GPU plugin.
-     * @param gpu The GPU plugin's draw callbacks.
+     * Creates the VR callbacks around a renderer.
+     * @param renderer The renderer the scene is drawn through.
      * @param client The client.
      * @param config The plugin config.
-     * @param gpuConfig The GPU plugin config.
      * @param configManager The config manager the settings panel writes to.
      * @param onEnded Receives the reason, on the client thread, when the session ends or fails.
      */
-    public VrCallbacks(DrawCallbacks gpu, Client client, VitaVRConfig config, GpuPluginConfig gpuConfig, ConfigManager configManager, Consumer<String> onEnded)
+    public VrCallbacks(SceneRenderer renderer, Client client, VitaVRConfig config, ConfigManager configManager, Consumer<String> onEnded)
     {
         this.configManager = configManager;
         this.keys = new CanvasKeys(client);
-        this.gpu = gpu;
+        this.renderer = renderer;
+        this.plugin = renderer.plugin();
         this.client = client;
         this.config = config;
-        this.gpuConfig = gpuConfig;
         this.onEnded = onEnded;
         this.overlays = new ActorOverlays(client);
         this.clearance = new EyeClearance(client);
@@ -203,24 +189,24 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
     }
 
     /**
-     * Sets the GPU flags for VR, drawing every zone since the head can face any way. Runs on the client thread.
+     * Sets the renderer up for VR, drawing every zone since the head can face any way. Runs on the client thread.
      */
     public void applyFlags()
     {
-        client.setGpuFlags(GpuInternals.flags(gpuConfig, true));
+        renderer.applyFlags();
         flagsStale = false;
     }
 
     /**
-     * Restores the GPU plugin's own GPU flags. Runs on the client thread.
+     * Puts the renderer back as the desktop had it. Runs on the client thread.
      */
     public void restoreFlags()
     {
-        client.setGpuFlags(GpuInternals.flags(gpuConfig, false));
+        renderer.restoreFlags();
     }
 
     /**
-     * Reapplies the GPU flags before the next frame after a GPU plugin setting change. Safe on any thread.
+     * Sets the GPU plugin up for VR again before the next frame after one of its settings changed. Safe on any thread.
      */
     public void gpuSettingsChanged()
     {
@@ -437,27 +423,17 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
     }
 
     /**
-     * Prepares the eyes for the scene, saving the GPU plugin's framebuffer and matrix and clearing to the sky colour.
+     * Starts the views for the scene, clearing them to the sky colour; fog centres on the head, or on the player on the tabletop.
      */
     private void startEyes()
     {
-        sceneFramebuffer = GL11.glGetInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
-        GL11.glGetIntegerv(GL11.GL_VIEWPORT, sceneViewport);
-        int program = GL11.glGetInteger(GL20.GL_CURRENT_PROGRAM);
-        if (program != worldProjProgram)
-        {
-            worldProjProgram = program;
-            worldProj = GL20.glGetUniformLocation(program, "worldProj");
-            useFogUniform = GL20.glGetUniformLocation(program, "useFog");
-            fogDepthUniform = GL20.glGetUniformLocation(program, "fogDepth");
-            drawDistanceUniform = GL20.glGetUniformLocation(program, "drawDistance");
-        }
-        if (worldProj < 0)
+        View centre = placement.getCentre();
+        double fogX = tabletop ? placement.anchorX() : centre.eyeX();
+        double fogZ = tabletop ? placement.anchorZ() : centre.eyeZ();
+        if (!renderer.startViews(views, fogX, fogZ, tabletop ? tableReach : 0))
         {
             return;
         }
-        GL20.glGetUniformfv(program, worldProj, gpuWorldProj);
-        centreFog();
         eyes.clear(client.getSkyboxColor());
         if (recording.isSpectating())
         {
@@ -465,33 +441,6 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
         }
         drawingEyes = true;
         sceneFrom = System.nanoTime();
-    }
-
-    /**
-     * Centres the GPU plugin's fog on the head in first person, or on the player on the tabletop.
-     */
-    private void centreFog()
-    {
-        View centre = placement.getCentre();
-        double fogX = tabletop ? placement.anchorX() : centre.eyeX();
-        double fogZ = tabletop ? placement.anchorZ() : centre.eyeZ();
-
-        // Uniform block starts cameraYaw, cameraPitch, cameraX, cameraY, cameraZ as std140 floats
-        int block = GL30.glGetIntegeri(GL31.GL_UNIFORM_BUFFER_BINDING, 0);
-        if (block != 0)
-        {
-            int bound = GL11.glGetInteger(GL31.GL_UNIFORM_BUFFER_BINDING);
-            GL15.glBindBuffer(GL31.GL_UNIFORM_BUFFER, block);
-            GL15.glBufferSubData(GL31.GL_UNIFORM_BUFFER, 8, new float[]{(float) fogX});
-            GL15.glBufferSubData(GL31.GL_UNIFORM_BUFFER, 16, new float[]{(float) fogZ});
-            GL15.glBindBuffer(GL31.GL_UNIFORM_BUFFER, bound);
-        }
-        if (tabletop && drawDistanceUniform >= 0)
-        {
-            GL20.glUniform1i(useFogUniform, 1);
-            GL20.glUniform1i(fogDepthUniform, TABLE_FOG_TILES);
-            GL20.glUniform1i(drawDistanceUniform, (int) Math.round(tableReach));
-        }
     }
 
     /**
@@ -503,96 +452,11 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
         {
             return false;
         }
-        double left = GpuInternals.zoneEdge(zoneX);
-        double bottom = GpuInternals.zoneEdge(zoneZ);
-        double dx = Math.max(0, Math.max(left - placement.anchorX(), placement.anchorX() - (left + GpuInternals.ZONE_UNITS)));
-        double dz = Math.max(0, Math.max(bottom - placement.anchorZ(), placement.anchorZ() - (bottom + GpuInternals.ZONE_UNITS)));
+        double left = Zones.edge(zoneX);
+        double bottom = Zones.edge(zoneZ);
+        double dx = Math.max(0, Math.max(left - placement.anchorX(), placement.anchorX() - (left + Zones.UNITS)));
+        double dz = Math.max(0, Math.max(bottom - placement.anchorZ(), placement.anchorZ() - (bottom + Zones.UNITS)));
         return dx * dx + dz * dz > tableReach * tableReach;
-    }
-
-    /**
-     * A reusable opaque zone draw, run once per view.
-     */
-    private final class ZoneDraw implements Runnable
-    {
-        private final Runnable once = this::once;
-        private Projection projection;
-        private Scene scene;
-        private int zoneX;
-        private int zoneZ;
-
-        private void set(Projection projection, Scene scene, int zoneX, int zoneZ)
-        {
-            this.projection = projection;
-            this.scene = scene;
-            this.zoneX = zoneX;
-            this.zoneZ = zoneZ;
-        }
-
-        @Override
-        public void run()
-        {
-            forEachEye(once);
-        }
-
-        private void once()
-        {
-            gpu.drawZoneOpaque(projection, scene, zoneX, zoneZ);
-        }
-    }
-
-    /**
-     * A reusable alpha zone draw for the right eye and steadied camera, after the GPU plugin drew the left.
-     */
-    private final class AlphaDraw implements Runnable
-    {
-        private Scene scene;
-        private int level;
-        private int zoneX;
-        private int zoneZ;
-
-        private void set(Scene scene, int level, int zoneX, int zoneZ)
-        {
-            this.scene = scene;
-            this.level = level;
-            this.zoneX = zoneX;
-            this.zoneZ = zoneZ;
-        }
-
-        @Override
-        public void run()
-        {
-            useEye(1);
-            internals.drawZoneAlphaAgain(scene, level, zoneX, zoneZ);
-            if (recording.isSpectating())
-            {
-                useSpectator();
-                internals.drawZoneAlphaAgain(scene, level, zoneX, zoneZ);
-            }
-        }
-    }
-
-    /**
-     * Runs a GPU plugin draw once for each eye.
-     */
-    private void forEachEye(Runnable draw)
-    {
-        for (int eye = 0; eye < EYES; eye++)
-        {
-            useEye(eye);
-            draw.run();
-        }
-        if (recording.isSpectating())
-        {
-            useSpectator();
-            draw.run();
-        }
-    }
-
-    private void useSpectator()
-    {
-        recording.useSpectator();
-        GL20.glUniformMatrix4fv(worldProj, false, recording.getSpectatorMatrix());
     }
 
     /**
@@ -919,12 +783,6 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
         }
     }
 
-    private void useEye(int eye)
-    {
-        eyes.use(eye);
-        GL20.glUniformMatrix4fv(worldProj, false, eyeMatrices[eye]);
-    }
-
     /**
      * Draws tile outlines, pointers, actor overlays and the wrist plate into the bound view.
      */
@@ -937,7 +795,7 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
     }
 
     /**
-     * Submits both eyes to the headset and restores the GPU plugin's framebuffer, mirroring the left eye if enabled.
+     * Draws over the views, submits both eyes to the headset and mirrors the left eye if enabled.
      */
     private void finishEyes()
     {
@@ -955,15 +813,10 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
         prepareOverlays();
         prepareTiles();
         rideWrist();
-        for (int eye = 0; eye < EYES; eye++)
+        for (int view = 0; view < views.count(); view++)
         {
-            eyes.use(eye);
-            drawOver(placement.eye(eye), eyeMatrices[eye]);
-        }
-        if (recording.isSpectating())
-        {
-            recording.useSpectator();
-            drawOver(recording.getSpectatorView(), recording.getSpectatorMatrix());
+            views.bind(view);
+            drawOver(views.view(view), views.worldToClip(view));
         }
         eyes.resolve();
         for (int eye = 0; eye < EYES; eye++)
@@ -976,17 +829,15 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
         eyesDrawn = true;
         recording.record(eyes, eyeMatrices);
 
-        if (config.mirror())
+        if (config.mirror() && renderer.bindMirror(mirrorViewport))
         {
-            GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, sceneFramebuffer);
-            GL11.glViewport(sceneViewport[0], sceneViewport[1], sceneViewport[2], sceneViewport[3]);
             mirror();
         }
         state.restore();
     }
 
     /**
-     * Restores the GPU plugin's scene framebuffer, viewport and matrix.
+     * Stops drawing into the views and gives the renderer back its own targets.
      */
     private void leaveEyes()
     {
@@ -995,17 +846,15 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
             return;
         }
         drawingEyes = false;
-        GL20.glUniformMatrix4fv(worldProj, false, gpuWorldProj);
-        GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, sceneFramebuffer);
-        GL11.glViewport(sceneViewport[0], sceneViewport[1], sceneViewport[2], sceneViewport[3]);
+        renderer.leaveViews();
     }
 
     /**
-     * Draws the left eye over the game's viewport, cropped to its shape.
+     * Draws the left eye over the bound desktop picture, cropped to its shape.
      */
     private void mirror()
     {
-        double viewportAspect = (double) sceneViewport[2] / Math.max(1, sceneViewport[3]);
+        double viewportAspect = (double) mirrorViewport[2] / Math.max(1, mirrorViewport[3]);
         double eyeAspect = (double) eyes.getEyeWidth() / eyes.getEyeHeight();
         if (viewportAspect > eyeAspect)
         {
@@ -1020,7 +869,7 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
     }
 
     /**
-     * Opens the headset on first use, in the GPU plugin's context on the client thread.
+     * Opens the headset on first use, in the renderer's context on the client thread.
      *
      * @return Whether the headset is open.
      */
@@ -1036,7 +885,6 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
         }
         try
         {
-            internals = new GpuInternals(gpu);
             headset = Headset.open(WGL.wglGetCurrentDC(), WGL.wglGetCurrentContext());
             controllers = new Controllers(headset.getSession());
             int width = 1;
@@ -1055,7 +903,8 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
             markers = new Markers();
             layers = new Layers(client, config, configManager, keys, headset, pointer);
             recording = new Recording(config, layers, placement, times);
-            roofs = new Roofs(client, config, internals);
+            views = new SceneViews(eyes, eyeMatrices, placement, recording);
+            roofs = new Roofs(client, config, renderer);
             atlas = new AtlasQuad(ActorOverlays.ATLAS_WIDTH, ActorOverlays.ATLAS_HEIGHT);
             shade = new ComfortShade();
             return true;
@@ -1097,10 +946,18 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
         }
         catch (RuntimeException e)
         {
-            Logger.error(e, "[VitaVR] Headset frame failed");
-            leaveEyes();
-            end("Headset error: " + e.getMessage());
+            failed(e);
         }
+    }
+
+    /**
+     * Ends VR after a failed headset step, giving the renderer back its own targets first.
+     */
+    private void failed(RuntimeException e)
+    {
+        Logger.error(e, "[VitaVR] Headset frame failed");
+        leaveEyes();
+        end("Headset error: " + e.getMessage());
     }
 
     @Override
@@ -1117,19 +974,21 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
             safely(this::beginFrame);
         }
         // Kept roofs draw every level up to the top
-        boolean keep = roofs != null && roofs.keeps(scene, minLevel, level);
-        gpu.preSceneDraw(scene, entityProjection, cameraX, cameraY, cameraZ, cameraPitch, cameraYaw, minLevel, level, keep ? Roofs.TOP_LEVEL : maxLevel,
-                keep ? Collections.emptySet() : hideRoofIds);
-        if (internals != null)
+        boolean keep = roofs != null && roofs.keeps(scene, level);
+        View head = toplevel && placed && !ended ? placement.getCentre() : null;
+        try
         {
-            safely(() -> internals.prepare(scene));
+            renderer.preSceneDraw(scene, entityProjection, cameraX, cameraY, cameraZ, cameraPitch, cameraYaw, minLevel, level, keep ? Roofs.TOP_LEVEL : maxLevel,
+                    keep ? Collections.emptySet() : hideRoofIds, head);
         }
-        if (toplevel && placed)
+        catch (RuntimeException e)
+        {
+            failed(e);
+        }
+        if (head != null)
         {
             safely(() ->
             {
-                View centre = placement.getCentre();
-                internals.sortFrom(scene, centre.eyeX(), centre.eyeY(), centre.eyeZ(), centre.yaw(), centre.pitch());
                 recording.pace(spectatorHead());
                 startEyes();
             });
@@ -1139,65 +998,81 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
     @Override
     public void drawZoneOpaque(Projection projection, Scene scene, int zoneX, int zoneZ)
     {
-        if (drawingEyes)
+        if (!drawingEyes)
         {
-            if (!offTable(scene, zoneX, zoneZ))
-            {
-                zoneDraw.set(projection, scene, zoneX, zoneZ);
-                zoneDraw.run();
-                if (roofs.hasCeilings(scene, zoneX, zoneZ, placement.anchorX(), placement.anchorZ()))
-                {
-                    safely(() -> roofs.ceilings(scene, zoneDraw));
-                }
-            }
+            plugin.drawZoneOpaque(projection, scene, zoneX, zoneZ);
             return;
         }
-        gpu.drawZoneOpaque(projection, scene, zoneX, zoneZ);
+        if (offTable(scene, zoneX, zoneZ))
+        {
+            return;
+        }
+        try
+        {
+            renderer.drawZoneOpaque(projection, scene, zoneX, zoneZ);
+            if (roofs.hasCeilings(scene, zoneX, zoneZ, placement.anchorX(), placement.anchorZ()))
+            {
+                roofs.ceilings(projection, scene, zoneX, zoneZ);
+            }
+        }
+        catch (RuntimeException e)
+        {
+            failed(e);
+        }
     }
 
     @Override
     public void drawZoneAlpha(Projection projection, Scene scene, int level, int zoneX, int zoneZ)
     {
-        if (drawingEyes && offTable(scene, zoneX, zoneZ))
+        if (!drawingEyes)
+        {
+            plugin.drawZoneAlpha(projection, scene, level, zoneX, zoneZ);
+            return;
+        }
+        if (offTable(scene, zoneX, zoneZ))
         {
             return;
         }
-        if (drawingEyes)
+        try
         {
-            // Plugin call for the left eye, since its zone sorting must run only once
-            useEye(0);
-            gpu.drawZoneAlpha(projection, scene, level, zoneX, zoneZ);
-            alphaDraw.set(scene, level, zoneX, zoneZ);
-            safely(alphaDraw);
-            return;
+            renderer.drawZoneAlpha(projection, scene, level, zoneX, zoneZ);
         }
-        gpu.drawZoneAlpha(projection, scene, level, zoneX, zoneZ);
+        catch (RuntimeException e)
+        {
+            failed(e);
+        }
     }
 
     @Override
     public void drawPass(Projection projection, Scene scene, int pass)
     {
-        if (drawingEyes && pass == DrawCallbacks.PASS_OPAQUE && scene.getWorldViewId() == WorldView.TOPLEVEL)
+        if (!drawingEyes)
         {
-            safely(() ->
-            {
-                internals.takeOpaque();
-                forEachEye(internals::drawOpaque);
-                internals.resetOpaque();
-            });
+            plugin.drawPass(projection, scene, pass);
             return;
         }
-        gpu.drawPass(projection, scene, pass);
+        try
+        {
+            renderer.drawPass(projection, scene, pass);
+        }
+        catch (RuntimeException e)
+        {
+            failed(e);
+        }
     }
 
     @Override
     public void postSceneDraw(Scene scene)
     {
-        if (scene.getWorldViewId() == WorldView.TOPLEVEL && drawingEyes)
+        boolean views = scene.getWorldViewId() == WorldView.TOPLEVEL && drawingEyes;
+        try
         {
-            safely(this::finishEyes);
+            renderer.postSceneDraw(scene, views ? finishViews : null);
         }
-        gpu.postSceneDraw(scene);
+        catch (RuntimeException e)
+        {
+            failed(e);
+        }
     }
 
     @Override
@@ -1213,92 +1088,92 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
             }
             endFrame();
         });
-        gpu.draw(overlayColor);
+        plugin.draw(overlayColor);
     }
 
     @Override
     public boolean zoneInFrustum(int zoneX, int zoneZ, int maxY, int minY)
     {
-        return true;
+        return renderer.zoneInFrustum(zoneX, zoneZ, maxY, minY);
     }
 
     @Override
     public void draw(Projection projection, Scene scene, Renderable renderable, int orientation, int x, int y, int z, long hash)
     {
-        gpu.draw(projection, scene, renderable, orientation, x, y, z, hash);
+        plugin.draw(projection, scene, renderable, orientation, x, y, z, hash);
     }
 
     @Override
     public void drawScenePaint(Scene scene, SceneTilePaint paint, int plane, int tileX, int tileY)
     {
-        gpu.drawScenePaint(scene, paint, plane, tileX, tileY);
+        plugin.drawScenePaint(scene, paint, plane, tileX, tileY);
     }
 
     @Override
     public void drawSceneTileModel(Scene scene, SceneTileModel model, int tileX, int tileY)
     {
-        gpu.drawSceneTileModel(scene, model, tileX, tileY);
+        plugin.drawSceneTileModel(scene, model, tileX, tileY);
     }
 
     @Override
     public void drawScene(double cameraX, double cameraY, double cameraZ, double cameraPitch, double cameraYaw, int plane)
     {
-        gpu.drawScene(cameraX, cameraY, cameraZ, cameraPitch, cameraYaw, plane);
+        plugin.drawScene(cameraX, cameraY, cameraZ, cameraPitch, cameraYaw, plane);
     }
 
     @Override
     public void postDrawScene()
     {
-        gpu.postDrawScene();
+        plugin.postDrawScene();
     }
 
     @Override
     public void animate(Texture texture, int diff)
     {
-        gpu.animate(texture, diff);
+        plugin.animate(texture, diff);
     }
 
     @Override
     public void loadScene(Scene scene)
     {
-        gpu.loadScene(scene);
+        plugin.loadScene(scene);
     }
 
     @Override
     public void swapScene(Scene scene)
     {
-        gpu.swapScene(scene);
+        plugin.swapScene(scene);
     }
 
     @Override
     public boolean tileInFrustum(Scene scene, float pitchSin, float pitchCos, float yawSin, float yawCos, int cameraX, int cameraY, int cameraZ, int plane, int msx, int msy)
     {
-        return gpu.tileInFrustum(scene, pitchSin, pitchCos, yawSin, yawCos, cameraX, cameraY, cameraZ, plane, msx, msy);
+        return plugin.tileInFrustum(scene, pitchSin, pitchCos, yawSin, yawCos, cameraX, cameraY, cameraZ, plane, msx, msy);
     }
 
     @Override
     public void loadScene(WorldView worldView, Scene scene)
     {
-        gpu.loadScene(worldView, scene);
+        plugin.loadScene(worldView, scene);
     }
 
     @Override
     public void despawnWorldView(WorldView worldView)
     {
-        gpu.despawnWorldView(worldView);
+        plugin.despawnWorldView(worldView);
     }
 
     @Override
     public void drawDynamic(Projection projection, Scene scene, TileObject tileObject, Renderable renderable, Model model, int orientation, int x, int y, int z)
     {
-        gpu.drawDynamic(seenFrom(projection, scene), scene, tileObject, renderable, model, orientation, x, y, z);
+        plugin.drawDynamic(seenFrom(projection, scene), scene, tileObject, renderable, model, orientation, x, y, z);
     }
 
     @Override
     public void drawDynamic(int renderThreadId, Projection projection, Scene scene, TileObject tileObject, Renderable renderable, Model model, int orientation,
                             int x, int y, int z)
     {
-        gpu.drawDynamic(renderThreadId, seenFrom(projection, scene), scene, tileObject, renderable, model, orientation, x, y, z);
+        plugin.drawDynamic(renderThreadId, seenFrom(projection, scene), scene, tileObject, renderable, model, orientation, x, y, z);
     }
 
     @Override
@@ -1307,7 +1182,7 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
         Player player = client.getLocalPlayer();
         if (!firstPersonEyes() || scene.getWorldViewId() != WorldView.TOPLEVEL || player == null || gameObject.getRenderable() != player)
         {
-            gpu.drawTemp(seenFrom(projection, scene), scene, gameObject, model, orientation, x, y, z);
+            plugin.drawTemp(seenFrom(projection, scene), scene, gameObject, model, orientation, x, y, z);
             return;
         }
 
@@ -1318,7 +1193,7 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
         ownBody.shape(player, model, facing, bodyX, y, bodyZ);
         try
         {
-            gpu.drawTemp(seenFrom(projection, scene), scene, gameObject, model, facing, bodyX, y, bodyZ);
+            plugin.drawTemp(seenFrom(projection, scene), scene, gameObject, model, facing, bodyX, y, bodyZ);
         }
         finally
         {
@@ -1345,7 +1220,7 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
     @Override
     public void invalidateZone(Scene scene, int zoneX, int zoneZ)
     {
-        gpu.invalidateZone(scene, zoneX, zoneZ);
+        plugin.invalidateZone(scene, zoneX, zoneZ);
     }
 
     /**
