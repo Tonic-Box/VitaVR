@@ -7,9 +7,9 @@ import org.lwjgl.opengl.GL20;
 import org.lwjgl.opengl.GL30;
 
 /**
- * A snapshot of the OpenGL state VitaVR changes, restored before the GPU plugin draws again.
+ * A snapshot of the OpenGL state VitaVR changes, restored before the renderer draws again.
  */
-final class GlState
+public final class GlState
 {
     private final int[] value = new int[4];
     private int drawFramebuffer;
@@ -31,7 +31,7 @@ final class GlState
     /**
      * Saves the current state.
      */
-    void save()
+    public void save()
     {
         drawFramebuffer = get(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
         readFramebuffer = get(GL30.GL_READ_FRAMEBUFFER_BINDING);
@@ -54,7 +54,7 @@ final class GlState
     /**
      * Restores the last saved state.
      */
-    void restore()
+    public void restore()
     {
         GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, drawFramebuffer);
         GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, readFramebuffer);

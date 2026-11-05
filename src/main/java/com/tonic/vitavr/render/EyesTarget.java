@@ -16,6 +16,9 @@ public final class EyesTarget implements AutoCloseable
     @Getter
     private final int eyeHeight;
     private final int views;
+    /** The samples per pixel actually given, 1 for none. */
+    @Getter
+    private final int samples;
     @Getter
     private final int framebuffer;
     private final int colourBuffer;
@@ -40,6 +43,7 @@ public final class EyesTarget implements AutoCloseable
         this.views = views;
         int width = eyeWidth * views;
         int sampled = samples <= 1 ? 0 : Math.min(samples, GL11.glGetInteger(GL30.GL_MAX_SAMPLES));
+        this.samples = Math.max(1, sampled);
 
         framebuffer = GL30.glGenFramebuffers();
         GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, framebuffer);
@@ -120,6 +124,20 @@ public final class EyesTarget implements AutoCloseable
         GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, resolveFramebuffer);
         GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, target);
         GL30.glBlitFramebuffer(left, 0, left + eyeWidth, eyeHeight, 0, 0, eyeWidth, eyeHeight, GL11.GL_COLOR_BUFFER_BIT, GL11.GL_NEAREST);
+    }
+
+    /**
+     * Copies the colour and depth of a one view target of the same size and samples into a view, before it is resolved.
+     *
+     * @param view The view index.
+     * @param from The target copied from.
+     */
+    public void copyIn(int view, EyesTarget from)
+    {
+        int left = view * eyeWidth;
+        GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, from.framebuffer);
+        GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, framebuffer);
+        GL30.glBlitFramebuffer(0, 0, eyeWidth, eyeHeight, left, 0, left + eyeWidth, eyeHeight, GL11.GL_COLOR_BUFFER_BIT | GL11.GL_DEPTH_BUFFER_BIT, GL11.GL_NEAREST);
     }
 
     /**

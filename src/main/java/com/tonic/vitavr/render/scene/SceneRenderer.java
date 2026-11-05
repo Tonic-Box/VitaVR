@@ -10,7 +10,7 @@ import java.util.Set;
 /**
  * What VR needs from the game's renderer to get the scene into every view each frame.
  */
-public interface SceneRenderer
+public interface SceneRenderer extends AutoCloseable
 {
     /**
      * @return The renderer's own draw callbacks, which get every call VR does not change.
@@ -99,6 +99,13 @@ public interface SceneRenderer
     void postSceneDraw(Scene scene, Runnable finishViews);
 
     /**
+     * Draws the frame to the desktop, as the draw callback of the same name.
+     *
+     * @param overlayColor The overlay colour.
+     */
+    void draw(int overlayColor);
+
+    /**
      * Stops drawing into the views and gives the renderer back its own targets. Safe to call when not drawing them.
      */
     void leaveViews();
@@ -110,4 +117,10 @@ public interface SceneRenderer
      * @return Whether anything was bound.
      */
     boolean bindMirror(int[] viewport);
+
+    /**
+     * Releases what was made for VR. Call on the client thread. Safe to call more than once.
+     */
+    @Override
+    void close();
 }

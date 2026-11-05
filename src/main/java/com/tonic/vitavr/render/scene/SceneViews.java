@@ -4,14 +4,17 @@ import com.tonic.vitavr.render.EyesTarget;
 import com.tonic.vitavr.render.recording.Recording;
 import com.tonic.vitavr.space.View;
 import com.tonic.vitavr.space.placement.Placement;
+import lombok.Getter;
 
 /**
  * The views drawn each frame: both eyes, then the steadied recording camera while it records.
  */
 public final class SceneViews
 {
-    private static final int EYES = 2;
+    /** How many of the views are eyes, which come first. */
+    public static final int EYES = 2;
 
+    @Getter
     private final EyesTarget eyes;
     private final float[][] eyeMatrices;
     private final Placement placement;

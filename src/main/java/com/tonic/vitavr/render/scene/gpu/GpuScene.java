@@ -222,6 +222,12 @@ public final class GpuScene implements SceneRenderer
     }
 
     @Override
+    public void draw(int overlayColor)
+    {
+        gpu.draw(overlayColor);
+    }
+
+    @Override
     public void leaveViews()
     {
         if (!drawing)
@@ -241,6 +247,11 @@ public final class GpuScene implements SceneRenderer
         GL11.glViewport(sceneViewport[0], sceneViewport[1], sceneViewport[2], sceneViewport[3]);
         System.arraycopy(sceneViewport, 0, viewport, 0, 4);
         return true;
+    }
+
+    @Override
+    public void close()
+    {
     }
 
     /**

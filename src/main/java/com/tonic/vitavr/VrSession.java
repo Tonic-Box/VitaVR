@@ -3,7 +3,9 @@ package com.tonic.vitavr;
 import com.tonic.Logger;
 import com.tonic.services.WorldOverlays;
 import com.tonic.vitavr.render.VrCallbacks;
+import com.tonic.vitavr.render.scene.SceneRenderer;
 import com.tonic.vitavr.render.scene.gpu.GpuScene;
+import com.tonic.vitavr.render.scene.hd.HdScene;
 import lombok.Getter;
 import lombok.Setter;
 import net.runelite.api.Actor;
@@ -38,7 +40,7 @@ import java.util.Map;
 import java.util.function.Consumer;
 
 /**
- * A VR session that renders through the GPU plugin, pausing 117 HD, and restores the desktop on exit.
+ * A VR session that renders through 117 HD when it is running, else through the GPU plugin, and restores the desktop on exit.
  */
 @Singleton
 public class VrSession
@@ -85,6 +87,7 @@ public class VrSession
     private boolean hdWasEnabled;
     private boolean pausedHd;
     private boolean startedGpu;
+    private HdScene hdScene;
     private final Map<String, String> desktopSettings = new LinkedHashMap<>();
     private volatile VrCallbacks callbacks;
 
@@ -99,9 +102,15 @@ public class VrSession
             return;
         }
         running = true;
+        hd = plugin(HD);
+        hdWasEnabled = hd != null && pluginManager.isPluginEnabled(hd);
+        hdScene = runningHd();
         try
         {
-            useGpu();
+            if (hdScene == null)
+            {
+                useGpu();
+            }
         }
         catch (IllegalStateException e)
         {
@@ -110,14 +119,14 @@ public class VrSession
         }
 
         override(RUNELITE_GROUP, GAME_SIZE, config.hudCanvasWidth() + "x" + config.hudCanvasHeight());
-        for (String[] setting : GpuScene.VR_SETTINGS)
+        for (String[] setting : hdScene != null ? HdScene.VR_SETTINGS : GpuScene.VR_SETTINGS)
         {
             override(setting[0], setting[1], setting[2]);
         }
 
-        // Queued after the GPU plugin sets its draw callbacks
+        // Queued after the renderer sets its draw callbacks
         clientThread.invoke(this::install);
-        Logger.info("[VitaVR] Entering VR");
+        Logger.info(hdScene != null ? "[VitaVR] Entering VR through 117 HD" : "[VitaVR] Entering VR through the GPU plugin");
     }
 
     /**
@@ -153,7 +162,7 @@ public class VrSession
     }
 
     /**
-     * Wraps the GPU plugin's draw callbacks. Runs on the client thread.
+     * Wraps the renderer's draw callbacks. Runs on the client thread.
      */
     private void install()
     {
@@ -161,21 +170,33 @@ public class VrSession
         {
             return;
         }
-        DrawCallbacks gpu = client.getDrawCallbacks();
-        if (gpu == null)
+        DrawCallbacks drawing = client.getDrawCallbacks();
+        SceneRenderer renderer;
+        if (hdScene != null)
         {
-            ended("The GPU plugin did not start");
-            return;
+            if (drawing != hdScene.plugin())
+            {
+                ended("117 HD is not drawing");
+                return;
+            }
+            renderer = hdScene;
         }
-        GpuScene renderer;
-        try
+        else
         {
-            renderer = new GpuScene(gpu, client, configManager.getConfig(GpuPluginConfig.class));
-        }
-        catch (IllegalStateException e)
-        {
-            ended(e.getMessage());
-            return;
+            if (drawing == null)
+            {
+                ended("The GPU plugin did not start");
+                return;
+            }
+            try
+            {
+                renderer = new GpuScene(drawing, client, configManager.getConfig(GpuPluginConfig.class));
+            }
+            catch (IllegalStateException e)
+            {
+                ended(e.getMessage());
+                return;
+            }
         }
         callbacks = new VrCallbacks(renderer, client, config, configManager, this::ended);
         client.setDrawCallbacks(callbacks);
@@ -185,7 +206,7 @@ public class VrSession
     }
 
     /**
-     * Restores the GPU plugin's draw callbacks and closes the headset. Runs on the client thread.
+     * Restores the renderer's draw callbacks and closes the headset. Runs on the client thread.
      */
     private void uninstall()
     {
@@ -318,6 +339,7 @@ public class VrSession
         pausedHd = false;
         gpu = null;
         hd = null;
+        hdScene = null;
         Logger.info("[VitaVR] Back to desktop");
     }
 
@@ -353,6 +375,28 @@ public class VrSession
     }
 
     /**
+     * Wraps 117 HD if it is running and VitaVR can draw through it.
+     *
+     * @return The wrapped 117 HD, or null to draw through the GPU plugin.
+     */
+    private HdScene runningHd()
+    {
+        if (hd == null || !pluginManager.isPluginActive(hd))
+        {
+            return null;
+        }
+        try
+        {
+            return new HdScene(hd);
+        }
+        catch (IllegalStateException e)
+        {
+            Logger.warn("[VitaVR] " + e.getMessage() + "; drawing through the GPU plugin instead");
+            return null;
+        }
+    }
+
+    /**
      * Pauses 117 HD and starts the GPU plugin if it is not running.
      */
     private void useGpu()
@@ -363,8 +407,6 @@ public class VrSession
             throw new IllegalStateException("The GPU plugin is missing");
         }
         gpuWasEnabled = pluginManager.isPluginEnabled(gpu);
-        hd = plugin(HD);
-        hdWasEnabled = hd != null && pluginManager.isPluginEnabled(hd);
 
         if (hd != null && pluginManager.isPluginActive(hd))
         {

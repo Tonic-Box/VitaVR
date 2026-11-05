@@ -1088,7 +1088,7 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
             }
             endFrame();
         });
-        plugin.draw(overlayColor);
+        renderer.draw(overlayColor);
     }
 
     @Override
@@ -1230,6 +1230,7 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
     public void close()
     {
         leaveEyes();
+        renderer.close();
         if (recording != null)
         {
             recording.close();
