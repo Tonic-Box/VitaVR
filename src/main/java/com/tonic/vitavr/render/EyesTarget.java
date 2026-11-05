@@ -9,7 +9,7 @@ import java.nio.IntBuffer;
 /**
  * A multisampled framebuffer holding the views side by side, left eye first, resolved into a texture after the scene.
  */
-final class EyesTarget implements AutoCloseable
+public final class EyesTarget implements AutoCloseable
 {
     @Getter
     private final int eyeWidth;
@@ -33,7 +33,7 @@ final class EyesTarget implements AutoCloseable
      * @param samples The samples per pixel, 1 for none.
      * @param views The number of side by side views.
      */
-    EyesTarget(int eyeWidth, int eyeHeight, int samples, int views)
+    public EyesTarget(int eyeWidth, int eyeHeight, int samples, int views)
     {
         this.eyeWidth = eyeWidth;
         this.eyeHeight = eyeHeight;
@@ -77,7 +77,7 @@ final class EyesTarget implements AutoCloseable
      *
      * @param rgb The colour as 0xRRGGBB.
      */
-    void clear(int rgb)
+    public void clear(int rgb)
     {
         GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, framebuffer);
         GL11.glDisable(GL11.GL_SCISSOR_TEST);
@@ -91,7 +91,7 @@ final class EyesTarget implements AutoCloseable
      *
      * @param eye 0 for left, 1 for right.
      */
-    void use(int eye)
+    public void use(int eye)
     {
         GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, framebuffer);
         GL11.glViewport(eye * eyeWidth, 0, eyeWidth, eyeHeight);
@@ -100,7 +100,7 @@ final class EyesTarget implements AutoCloseable
     /**
      * Resolves the framebuffer into the texture.
      */
-    void resolve()
+    public void resolve()
     {
         int width = eyeWidth * views;
         GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, framebuffer);
@@ -114,7 +114,7 @@ final class EyesTarget implements AutoCloseable
      * @param eye 0 for left, 1 for right.
      * @param target The framebuffer to copy into.
      */
-    void copyEye(int eye, int target)
+    public void copyEye(int eye, int target)
     {
         int left = eye * eyeWidth;
         GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, resolveFramebuffer);
@@ -130,7 +130,7 @@ final class EyesTarget implements AutoCloseable
      * @param target The framebuffer to copy into.
      * @param into The destination rect as x, y, width and height from the bottom left.
      */
-    void copyEye(int eye, int[] from, int target, int[] into)
+    public void copyEye(int eye, int[] from, int target, int[] into)
     {
         int left = eye * eyeWidth + from[0];
         GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, resolveFramebuffer);

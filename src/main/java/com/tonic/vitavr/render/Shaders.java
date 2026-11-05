@@ -10,7 +10,7 @@ import java.nio.charset.StandardCharsets;
 /**
  * Builds VitaVR's shader programs from the .glsl files beside this class.
  */
-final class Shaders
+public final class Shaders
 {
     private Shaders()
     {
@@ -24,7 +24,7 @@ final class Shaders
      * @return The program id.
      * @throws IllegalStateException If a shader does not compile or the program does not link.
      */
-    static int program(String vertex, String fragment)
+    public static int program(String vertex, String fragment)
     {
         int program = GL20.glCreateProgram();
         int vertexShader = compile(GL20.GL_VERTEX_SHADER, vertex);

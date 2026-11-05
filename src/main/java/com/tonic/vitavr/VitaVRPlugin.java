@@ -1,20 +1,21 @@
 package com.tonic.vitavr;
 
 import com.google.inject.Provides;
+import com.tonic.vitavr.ui.SidePanel;
+import net.runelite.api.events.HitsplatApplied;
+import net.runelite.api.events.MenuOptionClicked;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.events.ConfigChanged;
-import net.runelite.api.events.HitsplatApplied;
-import net.runelite.api.events.MenuOptionClicked;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.ui.ClientToolbar;
 import net.runelite.client.ui.NavigationButton;
 import net.runelite.client.util.ImageUtil;
 
+import java.awt.image.BufferedImage;
 import javax.inject.Inject;
 import javax.swing.SwingUtilities;
-import java.awt.image.BufferedImage;
 
 @PluginDescriptor(
         name = "VitaVR",

@@ -22,7 +22,7 @@ import java.util.Set;
 /**
  * Reflective access to the GPU plugin internals needed to draw both eyes from one scene walk.
  */
-final class GpuInternals
+public final class GpuInternals
 {
     private static final int SCENE_OFFSET = (Constants.EXTENDED_SCENE_SIZE - Constants.SCENE_SIZE) / 2;
     private static final int ALPHA_ZSORT_CLOSE = 2048;
@@ -141,7 +141,7 @@ final class GpuInternals
      * @param at The coordinate, in game units.
      * @return The zone index in the extended scene.
      */
-    static int zoneOf(double at)
+    public static int zoneOf(double at)
     {
         return (int) Math.floor(at / ZONE_UNITS) + ZONE_OFFSET;
     }
@@ -255,7 +255,7 @@ final class GpuInternals
      * @param lowest The lowest level drawn.
      * @param highest The highest level drawn.
      */
-    void levels(Scene scene, int lowest, int highest)
+    public void levels(Scene scene, int lowest, int highest)
     {
         SceneState state = state(scene);
         if (state != null)
@@ -311,7 +311,7 @@ final class GpuInternals
      * @param from The lowest level checked.
      * @return Whether the zone has faces on that level or above.
      */
-    boolean hasFacesFrom(Scene scene, int zoneX, int zoneZ, int from)
+    public boolean hasFacesFrom(Scene scene, int zoneX, int zoneZ, int from)
     {
         SceneState state = state(scene);
         if (state == null)
