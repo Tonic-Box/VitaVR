@@ -217,13 +217,13 @@ public interface VitaVRConfig extends Config
     @ConfigItem(keyName = HUD_SIZE, name = "Interfaces size", description = "The interfaces' size in percent", position = 0, section = INTERFACES)
     default int hudSizePercent()
     {
-        return 140;
+        return 160;
     }
 
     @ConfigItem(keyName = HUD_DISTANCE, name = "Interfaces distance", description = "Metres from you to the interfaces (0.5 to 4)", position = 1, section = INTERFACES)
     default double hudDistance()
     {
-        return 1.4;
+        return 2.2;
     }
 
     @Range(min = 50, max = 250)
@@ -244,7 +244,7 @@ public interface VitaVRConfig extends Config
     @ConfigItem(keyName = SIDES_APART, name = "Sides apart", description = "Degrees between the middle and the side columns", position = 4, section = INTERFACES)
     default int sidesApartDegrees()
     {
-        return 10;
+        return 0;
     }
 
     @ConfigItem(keyName = OUTLINE_HOVERED, name = "Hovered tile", description = "Outline the tile you point at", position = 5, section = INTERFACES)
