@@ -455,17 +455,6 @@ public final class Headset implements AutoCloseable
     }
 
     /**
-     * Asks the runtime to end the session.
-     */
-    public void requestExit()
-    {
-        if (running)
-        {
-            XR10.xrRequestExitSession(session);
-        }
-    }
-
-    /**
      * Destroys the session and instance. Safe to call more than once.
      */
     @Override

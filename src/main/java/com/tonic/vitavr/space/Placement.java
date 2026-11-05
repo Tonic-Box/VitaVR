@@ -11,7 +11,6 @@ import lombok.Getter;
  */
 public final class Placement
 {
-    private static final int EYES = 2;
     /** A standing player's eye height, in metres. */
     private static final double STANDING_EYE = 1.65;
     private static final float STICK_PUSHED = 0.7f;

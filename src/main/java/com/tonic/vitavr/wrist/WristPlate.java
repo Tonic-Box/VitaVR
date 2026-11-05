@@ -1,5 +1,6 @@
 package com.tonic.vitavr.wrist;
 
+import com.tonic.vitavr.space.Billboard;
 import com.tonic.vitavr.space.Pose;
 
 /**
@@ -14,13 +15,11 @@ public final class WristPlate
     private final int width;
     private final int height;
     private final double metresPerPixel;
+    private final Billboard board = new Billboard();
     private final double[] centre = new double[3];
-    private final double[] right = new double[3];
+    private final double[] forward = new double[3];
     private final double[] up = new double[3];
-    private final double[] normal = new double[3];
-    private final double[] direction = new double[3];
-    private final double[] hit = new double[3];
-    private boolean placed;
+    private final double[] out = new double[3];
 
     /**
      * Creates a plate of the given size.
@@ -52,21 +51,16 @@ public final class WristPlate
     {
         if (held == null)
         {
-            placed = false;
+            board.clear();
             return;
         }
-        double[] forward = new double[3];
         held.rotate(0, 0, -1, forward);
         held.rotate(0, 1, 0, up);
-        held.rotate(1, 0, 0, normal);
-        System.arraycopy(forward, 0, right, 0, 3);
-        double[] at = {held.x(), held.y(), held.z()};
-        for (int axis = 0; axis < 3; axis++)
-        {
-            centre[axis] = at[axis] - forward[axis] * BACK_METRES - up[axis] * DOWN_METRES + normal[axis] * OUT_METRES;
-        }
-        turnToHand();
-        placed = true;
+        held.rotate(1, 0, 0, out);
+        centre[0] = held.x() - forward[0] * BACK_METRES - up[0] * DOWN_METRES + out[0] * OUT_METRES;
+        centre[1] = held.y() - forward[1] * BACK_METRES - up[1] * DOWN_METRES + out[1] * OUT_METRES;
+        centre[2] = held.z() - forward[2] * BACK_METRES - up[2] * DOWN_METRES + out[2] * OUT_METRES;
+        layOn(centre, forward, out);
     }
 
     /**
@@ -77,33 +71,22 @@ public final class WristPlate
      */
     public void placeOn(double[] at, double[] along, double[] out)
     {
-        System.arraycopy(at, 0, centre, 0, 3);
-        System.arraycopy(along, 0, right, 0, 3);
-        System.arraycopy(out, 0, normal, 0, 3);
-        up[0] = out[1] * along[2] - out[2] * along[1];
-        up[1] = out[2] * along[0] - out[0] * along[2];
-        up[2] = out[0] * along[1] - out[1] * along[0];
-        turnToHand();
-        placed = true;
+        layOn(at, along, out);
     }
 
     /**
-     * Turns the picture a quarter turn to read across the wrist.
+     * Lays the plate with its top along the forearm, facing out of the wrist.
      */
-    private void turnToHand()
+    private void layOn(double[] at, double[] along, double[] facing)
     {
-        for (int axis = 0; axis < 3; axis++)
-        {
-            double along = right[axis];
-            right[axis] = -up[axis];
-            up[axis] = along;
-        }
+        double[] across = {along[1] * facing[2] - along[2] * facing[1], along[2] * facing[0] - along[0] * facing[2], along[0] * facing[1] - along[1] * facing[0]};
+        board.lay(at, across, along, width, height, metresPerPixel);
     }
 
     /** @return Whether the plate is placed on a tracked wrist. */
     public boolean placed()
     {
-        return placed;
+        return board.placed();
     }
 
     /**
@@ -115,19 +98,7 @@ public final class WristPlate
      */
     public double facing(double x, double y, double z)
     {
-        if (!placed)
-        {
-            return -1;
-        }
-        double dx = x - centre[0];
-        double dy = y - centre[1];
-        double dz = z - centre[2];
-        double length = Math.sqrt(dx * dx + dy * dy + dz * dz);
-        if (length < 1e-9)
-        {
-            return -1;
-        }
-        return (dx * normal[0] + dy * normal[1] + dz * normal[2]) / length;
+        return board.facing(x, y, z);
     }
 
     /**
@@ -137,8 +108,7 @@ public final class WristPlate
      */
     public int[] crossing(Pose aim)
     {
-        double[] met = hit(aim);
-        return met == null ? null : new int[] {(int) met[1], (int) met[2]};
+        return board.crossing(aim);
     }
 
     /**
@@ -148,40 +118,7 @@ public final class WristPlate
      */
     public double reach(Pose aim)
     {
-        double[] met = hit(aim);
-        return met == null ? Double.POSITIVE_INFINITY : met[0];
-    }
-
-    private double[] hit(Pose aim)
-    {
-        if (!placed || aim == null)
-        {
-            return null;
-        }
-        aim.rotate(0, 0, -1, direction);
-        double facing = direction[0] * normal[0] + direction[1] * normal[1] + direction[2] * normal[2];
-        if (facing >= -1e-6)
-        {
-            return null;
-        }
-        double t = ((centre[0] - aim.x()) * normal[0] + (centre[1] - aim.y()) * normal[1] + (centre[2] - aim.z()) * normal[2]) / facing;
-        if (t <= 0)
-        {
-            return null;
-        }
-        double x = aim.x() + direction[0] * t - centre[0];
-        double y = aim.y() + direction[1] * t - centre[1];
-        double z = aim.z() + direction[2] * t - centre[2];
-        double px = (x * right[0] + y * right[1] + z * right[2]) / metresPerPixel + width / 2.0;
-        double py = height / 2.0 - (x * up[0] + y * up[1] + z * up[2]) / metresPerPixel;
-        if (px < 0 || py < 0 || px >= width || py >= height)
-        {
-            return null;
-        }
-        hit[0] = t;
-        hit[1] = Math.floor(px);
-        hit[2] = Math.floor(py);
-        return hit;
+        return board.reach(aim);
     }
 
     /**
@@ -190,20 +127,6 @@ public final class WristPlate
      */
     public void corners(double[][] out)
     {
-        double halfWide = width * metresPerPixel / 2;
-        double halfTall = height * metresPerPixel / 2;
-        int[][] signs = {{-1, 1}, {1, 1}, {1, -1}, {-1, -1}};
-        for (int corner = 0; corner < 4; corner++)
-        {
-            for (int axis = 0; axis < 3; axis++)
-            {
-                out[corner][axis] = centre[axis] + right[axis] * signs[corner][0] * halfWide + up[axis] * signs[corner][1] * halfTall;
-            }
-        }
-    }
-
-    public double[] centre()
-    {
-        return centre;
+        board.corners(out);
     }
 }

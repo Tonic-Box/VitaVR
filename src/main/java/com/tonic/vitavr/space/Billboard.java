@@ -14,8 +14,6 @@ public final class Billboard
     private int width;
     private int height;
     private double metresPerPixel;
-    private double yaw;
-    private double pitch;
     private boolean placed;
 
     /**
@@ -48,8 +46,8 @@ public final class Billboard
             aheadZ = -1;
             length = 1;
         }
-        yaw = Math.atan2(-aheadX, -aheadZ);
-        pitch = Math.asin(Math.max(-1, Math.min(1, aheadY / length)));
+        double yaw = Math.atan2(-aheadX, -aheadZ);
+        double pitch = Math.asin(Math.max(-1, Math.min(1, aheadY / length)));
 
         double cosYaw = Math.cos(yaw);
         double sinYaw = Math.sin(yaw);
@@ -73,6 +71,51 @@ public final class Billboard
             centre[axis] = point[axis] + right[axis] * across + up[axis] * above;
         }
         placed = true;
+    }
+
+    /**
+     * Places the picture along given axes with its middle on a room point.
+     *
+     * @param middle         The room point for the middle.
+     * @param across         The unit left to right direction.
+     * @param upward         The unit up direction, square to across; the picture faces across x upward.
+     * @param width          The width, in pixels.
+     * @param height         The height, in pixels.
+     * @param metresPerPixel The size of a pixel, in metres.
+     */
+    public void lay(double[] middle, double[] across, double[] upward, int width, int height, double metresPerPixel)
+    {
+        this.width = width;
+        this.height = height;
+        this.metresPerPixel = metresPerPixel;
+        System.arraycopy(middle, 0, centre, 0, 3);
+        System.arraycopy(across, 0, right, 0, 3);
+        System.arraycopy(upward, 0, up, 0, 3);
+        normal[0] = across[1] * upward[2] - across[2] * upward[1];
+        normal[1] = across[2] * upward[0] - across[0] * upward[2];
+        normal[2] = across[0] * upward[1] - across[1] * upward[0];
+        placed = true;
+    }
+
+    /**
+     * Gets how squarely the picture faces a room point.
+     *
+     * @param x The room x (across).
+     * @param y The room y (up).
+     * @param z The room z (back).
+     * @return The cosine between the facing and the point, or -1 if not placed.
+     */
+    public double facing(double x, double y, double z)
+    {
+        double dx = x - centre[0];
+        double dy = y - centre[1];
+        double dz = z - centre[2];
+        double length = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        if (!placed || length < 1e-9)
+        {
+            return -1;
+        }
+        return (dx * normal[0] + dy * normal[1] + dz * normal[2]) / length;
     }
 
     /**
@@ -176,11 +219,24 @@ public final class Billboard
      */
     public double[] orientation()
     {
-        double sinYaw = Math.sin(yaw / 2);
-        double cosYaw = Math.cos(yaw / 2);
-        double sinPitch = Math.sin(pitch / 2);
-        double cosPitch = Math.cos(pitch / 2);
-        return new double[]{cosYaw * sinPitch, sinYaw * cosPitch, -sinYaw * sinPitch, cosYaw * cosPitch};
+        double trace = right[0] + up[1] + normal[2];
+        if (trace > 0)
+        {
+            double s = Math.sqrt(trace + 1) * 2;
+            return new double[]{(up[2] - normal[1]) / s, (normal[0] - right[2]) / s, (right[1] - up[0]) / s, s / 4};
+        }
+        if (right[0] > up[1] && right[0] > normal[2])
+        {
+            double s = Math.sqrt(1 + right[0] - up[1] - normal[2]) * 2;
+            return new double[]{s / 4, (up[0] + right[1]) / s, (normal[0] + right[2]) / s, (up[2] - normal[1]) / s};
+        }
+        if (up[1] > normal[2])
+        {
+            double s = Math.sqrt(1 + up[1] - right[0] - normal[2]) * 2;
+            return new double[]{(up[0] + right[1]) / s, s / 4, (normal[1] + up[2]) / s, (normal[0] - right[2]) / s};
+        }
+        double s = Math.sqrt(1 + normal[2] - right[0] - up[1]) * 2;
+        return new double[]{(normal[0] + right[2]) / s, (normal[1] + up[2]) / s, s / 4, (right[1] - up[0]) / s};
     }
 
     public double metresWide()
