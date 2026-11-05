@@ -104,8 +104,6 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
     private static final double OWN_BELOW_METRES = 0.3;
     /** How far below the own head stack the own hitsplats hang, in metres. */
     private static final double OWN_SPLATS_BELOW_METRES = 0.12;
-    /** How near a zone centre must be to the pointer for the probe to draw it, in game units. */
-    private static final double PROBE_ZONE_REACH = 1024;
 
     @Getter
     private final DrawCallbacks gpu;
@@ -151,7 +149,6 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
     private final double[] pointerHit = new double[3];
     private final ZoneDraw zoneDraw = new ZoneDraw();
     private final AlphaDraw alphaDraw = new AlphaDraw();
-    private final double[] aimForward = new double[3];
     private final double[] beamFrom = new double[3];
     private final double[] beamTo = new double[3];
     private final double[] crossAt = new double[3];
@@ -461,10 +458,6 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
         }
         GL20.glGetUniformfv(program, worldProj, gpuWorldProj);
         centreFog();
-        if (probe.aimed())
-        {
-            probe.clear();
-        }
         eyes.clear(client.getSkyboxColor());
         if (recording.isSpectating())
         {
@@ -527,21 +520,19 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
         private Scene scene;
         private int zoneX;
         private int zoneZ;
-        private boolean nearPointer;
 
-        private void set(Projection projection, Scene scene, int zoneX, int zoneZ, boolean nearPointer)
+        private void set(Projection projection, Scene scene, int zoneX, int zoneZ)
         {
             this.projection = projection;
             this.scene = scene;
             this.zoneX = zoneX;
             this.zoneZ = zoneZ;
-            this.nearPointer = nearPointer;
         }
 
         @Override
         public void run()
         {
-            forEachView(once, nearPointer);
+            forEachEye(once);
         }
 
         private void once()
@@ -602,49 +593,6 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
     {
         recording.useSpectator();
         GL20.glUniformMatrix4fv(worldProj, false, recording.getSpectatorMatrix());
-    }
-
-    /**
-     * Runs a GPU plugin draw for each eye, and for the pointer probe when aimed and requested.
-     */
-    private void forEachView(Runnable draw, boolean forProbe)
-    {
-        forEachEye(draw);
-        if (forProbe && probe.aimed())
-        {
-            probe.use();
-            GL20.glUniformMatrix4fv(worldProj, false, probe.getWorldToClip());
-            draw.run();
-        }
-    }
-
-    /**
-     * Gets whether a zone is near enough the pointer for the probe.
-     */
-    private boolean nearPointer(Scene scene, int zoneX, int zoneZ)
-    {
-        View aimed = pointer.view();
-        if (aimed == null)
-        {
-            return false;
-        }
-        if (scene.getWorldViewId() != WorldView.TOPLEVEL)
-        {
-            return true;
-        }
-        double[] forward = aimForward;
-        aimed.forward(forward);
-        double level = Math.hypot(forward[0], forward[2]);
-        double dx = GpuInternals.zoneEdge(zoneX) + GpuInternals.ZONE_UNITS / 2.0 - aimed.eyeX();
-        double dz = GpuInternals.zoneEdge(zoneZ) + GpuInternals.ZONE_UNITS / 2.0 - aimed.eyeZ();
-        if (level < 1e-6)
-        {
-            return dx * dx + dz * dz < PROBE_ZONE_REACH * PROBE_ZONE_REACH;
-        }
-        double along = Math.max(0, (dx * forward[0] + dz * forward[2]) / level);
-        double acrossX = dx - forward[0] / level * along;
-        double acrossZ = dz - forward[2] / level * along;
-        return acrossX * acrossX + acrossZ * acrossZ < PROBE_ZONE_REACH * PROBE_ZONE_REACH;
     }
 
     /**
@@ -1003,7 +951,7 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
     {
         leaveEyes();
         state.save();
-        probe.read();
+        probe.read(eyes, eyeMatrices[0]);
         prepareOverlays();
         prepareTiles();
         rideWrist();
@@ -1102,7 +1050,7 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
             eyeLayer = new EyeLayer(headset, new int[]{width, width}, new int[]{height, height});
             quad = new PictureQuad();
             pointer = new Pointer(client);
-            probe = new PointerProbe();
+            probe = new PointerProbe(width, height);
             beams = new Beams();
             markers = new Markers();
             layers = new Layers(client, config, configManager, keys, headset, pointer);
@@ -1195,7 +1143,7 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
         {
             if (!offTable(scene, zoneX, zoneZ))
             {
-                zoneDraw.set(projection, scene, zoneX, zoneZ, nearPointer(scene, zoneX, zoneZ));
+                zoneDraw.set(projection, scene, zoneX, zoneZ);
                 zoneDraw.run();
                 if (roofs.hasCeilings(scene, zoneX, zoneZ, placement.anchorX(), placement.anchorZ()))
                 {
@@ -1234,7 +1182,7 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
             safely(() ->
             {
                 internals.takeOpaque();
-                forEachView(internals::drawOpaque, true);
+                forEachEye(internals::drawOpaque);
                 internals.resetOpaque();
             });
             return;
