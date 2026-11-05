@@ -192,9 +192,9 @@ final class GpuInternals
     {
         try
         {
-            for (int i = 0; i < opaque.size(); i++)
+            for (Object vao : opaque)
             {
-                vaoDraw.invokeExact(opaque.get(i));
+                vaoDraw.invokeExact(vao);
             }
         }
         catch (Throwable e)
@@ -210,9 +210,9 @@ final class GpuInternals
     {
         try
         {
-            for (int i = 0; i < opaque.size(); i++)
+            for (Object vao : opaque)
             {
-                vaoReset.invokeExact(opaque.get(i));
+                vaoReset.invokeExact(vao);
             }
         }
         catch (Throwable e)

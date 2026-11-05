@@ -5,7 +5,6 @@ import net.runelite.api.Hitsplat;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.WeakHashMap;
@@ -55,13 +54,7 @@ final class Hitsplats
         {
             return Collections.emptyList();
         }
-        for (Iterator<Splat> it = splats.iterator(); it.hasNext(); )
-        {
-            if (it.next().goneOnCycle <= cycle)
-            {
-                it.remove();
-            }
-        }
+        splats.removeIf(splat -> splat.goneOnCycle <= cycle);
         if (splats.isEmpty())
         {
             byActor.remove(actor);

@@ -2,7 +2,6 @@ package com.tonic.vitavr.record;
 
 import java.io.IOException;
 import java.io.OutputStream;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -97,7 +96,7 @@ public final class FfmpegEncoder implements AutoCloseable
      */
     private void abort()
     {
-        List<ProcessHandle> started = new ArrayList<>(ffmpeg.descendants().collect(Collectors.toList()));
+        List<ProcessHandle> started = ffmpeg.descendants().collect(Collectors.toCollection(ArrayList::new));
         started.add(ffmpeg.toHandle());
         started.forEach(ProcessHandle::destroyForcibly);
         boolean interrupted = false;
@@ -139,7 +138,7 @@ public final class FfmpegEncoder implements AutoCloseable
 
     private String tail() throws IOException
     {
-        String text = new String(Files.readAllBytes(log), StandardCharsets.UTF_8).trim();
+        String text = Files.readString(log).trim();
         return text.isEmpty() ? "it said nothing" : text.length() > 600 ? text.substring(text.length() - 600) : text;
     }
 
