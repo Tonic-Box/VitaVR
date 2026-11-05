@@ -4,6 +4,8 @@ import com.tonic.Logger;
 import com.tonic.vitavr.VitaVRConfig;
 import com.tonic.vitavr.config.OneEyeCamera;
 import com.tonic.vitavr.config.RecordMode;
+import com.tonic.vitavr.hud.HudPicture;
+import com.tonic.vitavr.pointer.WorldMenu;
 import com.tonic.vitavr.record.FramePacer;
 import com.tonic.vitavr.record.SessionRecorder;
 import com.tonic.vitavr.record.SpectatorView;
@@ -13,7 +15,6 @@ import com.tonic.vitavr.space.Placement;
 import com.tonic.vitavr.space.Pose;
 import com.tonic.vitavr.space.View;
 import com.tonic.vitavr.timing.FrameTimes;
-import com.tonic.vitavr.xr.FloatingLayer;
 import com.tonic.vitavr.xr.HudPanel;
 import com.tonic.vitavr.xr.RoomPanel;
 import lombok.Getter;
@@ -89,7 +90,7 @@ final class Recording implements AutoCloseable
             Path directory = RuneLite.RUNELITE_DIR.toPath().resolve("vitavr").resolve("recordings");
             Files.createDirectories(directory);
             Path file = directory.resolve("vr-" + LocalDateTime.now().format(STAMP) + ".mp4");
-            video = Video.start(config, file);
+            video = Video.start(config, file, layers);
             Logger.info("[VitaVR] Recording the session to " + file);
         }
         catch (IOException e)
@@ -194,46 +195,50 @@ final class Recording implements AutoCloseable
      */
     private Shown shown()
     {
-        Shown shown = new Shown();
+        double[][][] strips = null;
+        double[][] across = null;
         HudPanel panel = layers.getPanel();
-        if (panel != null && panel.shown() && panel.getPicture() != 0)
+        HudPicture picture = layers.getPicture();
+        if (panel != null && panel.shown() && video.fitsInterfaces(picture.getWidth(), picture.getHeight()))
         {
+            video.interfaces.upload(picture.getPixels());
             double[][][] all = panel.strips();
             double[][] allAcross = panel.stripsAcross();
             int[] kept = panel.stripsFrom(config.recordHideChat() ? panel.chatSideEnd() : 0);
-            shown.strips = new double[kept.length][][];
-            shown.stripsAcross = new double[kept.length][];
+            strips = new double[kept.length][][];
+            across = new double[kept.length][];
             for (int strip = 0; strip < kept.length; strip++)
             {
-                shown.strips[strip] = inWorld(all[kept[strip]]);
-                shown.stripsAcross[strip] = allAcross[kept[strip]];
+                strips[strip] = inWorld(all[kept[strip]]);
+                across[strip] = allAcross[kept[strip]];
             }
-            shown.interfaces = panel.getPicture();
-            shown.interfacesWidth = panel.getPixelWidth();
-            shown.interfacesHeight = panel.getPixelHeight();
         }
 
-        FloatingLayer menuLayer = layers.getMenuLayer();
-        if (!menuLayer.isCleared())
+        double[][][] floating = new double[FLOATING][][];
+        WorldMenu menu = layers.getMenu();
+        if (!layers.getMenuLayer().isCleared())
         {
-            shown.floating(MENU, inWorld(layers.getMenu().getBoard()), menuLayer.getPicture(), menuLayer.getWidth(), menuLayer.getHeight());
+            video.floating[MENU].upload(menu.getCrop().getPixels());
+            floating[MENU] = inWorld(menu.getBoard());
         }
-        FloatingLayer labelLayer = layers.getLabelLayer();
-        if (!labelLayer.isCleared())
+        if (!layers.getLabelLayer().isCleared())
         {
-            shown.floating(LABEL, inWorld(layers.getLabelBoard()), labelLayer.getPicture(), labelLayer.getWidth(), labelLayer.getHeight());
+            video.floating[LABEL].upload(layers.getLabel().getPixels());
+            floating[LABEL] = inWorld(layers.getLabelBoard());
         }
-        ownPanel(shown, SETTINGS, layers.getSettingsPanel());
-        ownPanel(shown, KEYBOARD, layers.getKeyboardPanel());
-        return shown;
+        floating[SETTINGS] = ownPanel(layers.getSettingsPanel(), SETTINGS);
+        floating[KEYBOARD] = ownPanel(layers.getKeyboardPanel(), KEYBOARD);
+        return new Shown(strips, across, floating);
     }
 
-    private void ownPanel(Shown shown, int index, RoomPanel panel)
+    private double[][] ownPanel(RoomPanel panel, int index)
     {
-        if (panel.isShown())
+        if (!panel.isShown())
         {
-            shown.floating(index, inWorld(panel.getBoard()), panel.getPicture(), panel.getPanel().width(), panel.getPanel().height());
+            return null;
         }
+        video.floating[index].upload(panel.getPanel().pixels());
+        return inWorld(panel.getBoard());
     }
 
     /**
@@ -300,23 +305,15 @@ final class Recording implements AutoCloseable
      */
     private static final class Shown
     {
-        private double[][][] strips;
-        private double[][] stripsAcross;
-        private int interfaces;
-        private int interfacesWidth;
-        private int interfacesHeight;
-        private final double[][][] floating = new double[FLOATING][][];
-        private final int[] floatingPictures = new int[FLOATING];
-        private final int[][] floatingSizes = new int[FLOATING][];
+        private final double[][][] strips;
+        private final double[][] stripsAcross;
+        private final double[][][] floating;
 
-        private void floating(int index, double[][] corners, int picture, int width, int height)
+        private Shown(double[][][] strips, double[][] stripsAcross, double[][][] floating)
         {
-            if (picture != 0)
-            {
-                floating[index] = corners;
-                floatingPictures[index] = picture;
-                floatingSizes[index] = new int[]{width, height};
-            }
+            this.strips = strips;
+            this.stripsAcross = stripsAcross;
+            this.floating = floating;
         }
     }
 
@@ -334,20 +331,33 @@ final class Recording implements AutoCloseable
         private final FramePacer pacer = new FramePacer(SessionRecorder.FRAMES_PER_SECOND);
         private final EyesTarget picture;
         private final EyesTarget spectatorTarget;
-        private final AtlasQuad quad = new AtlasQuad();
+        private final AtlasQuad interfaces;
+        private final int interfacesWidth;
+        private final int interfacesHeight;
+        private final AtlasQuad[] floating;
+        private final int[][] floatingSizes;
         private final SpectatorView spectator = new SpectatorView();
         private final View spectatorView = new View();
         private final Fov spectatorFov;
         private int times;
         private boolean closed;
 
-        private Video(VitaVRConfig config, SessionRecorder recorder)
+        private Video(VitaVRConfig config, SessionRecorder recorder, int[] interfacesSize, int[][] floatingSizes)
         {
             this.mode = config.recordMode();
             this.steadied = mode == RecordMode.ONE_EYE && config.oneEyeCamera() == OneEyeCamera.STEADIED;
             this.recorder = recorder;
             this.picture = new EyesTarget(SessionRecorder.WIDTH, SessionRecorder.HEIGHT, 1, 1);
             this.spectatorTarget = steadied ? new EyesTarget(SessionRecorder.WIDTH, SessionRecorder.HEIGHT, config.samples(), 1) : null;
+            this.interfaces = new AtlasQuad(interfacesSize[0], interfacesSize[1]);
+            this.interfacesWidth = interfacesSize[0];
+            this.interfacesHeight = interfacesSize[1];
+            this.floatingSizes = floatingSizes;
+            this.floating = new AtlasQuad[floatingSizes.length];
+            for (int index = 0; index < floating.length; index++)
+            {
+                floating[index] = new AtlasQuad(floatingSizes[index][0], floatingSizes[index][1]);
+            }
             double halfUp = Math.tan(SPECTATOR_FOV / 2) * SessionRecorder.HEIGHT / SessionRecorder.WIDTH;
             this.spectatorFov = new Fov(-SPECTATOR_FOV / 2, SPECTATOR_FOV / 2, Math.atan(halfUp), -Math.atan(halfUp));
         }
@@ -355,18 +365,28 @@ final class Recording implements AutoCloseable
         /**
          * Starts a video in the current OpenGL context.
          */
-        private static Video start(VitaVRConfig config, Path file) throws IOException
+        private static Video start(VitaVRConfig config, Path file, Layers layers) throws IOException
         {
             SessionRecorder recorder = SessionRecorder.start(file);
             try
             {
-                return new Video(config, recorder);
+                HudPicture picture = layers.getPicture();
+                RoomPanel settings = layers.getSettingsPanel();
+                RoomPanel keyboard = layers.getKeyboardPanel();
+                return new Video(config, recorder, new int[]{picture.getWidth(), picture.getHeight()}, new int[][]{{WorldMenu.WIDTH, WorldMenu.HEIGHT},
+                        {Layers.LABEL_WIDTH, Layers.LABEL_HEIGHT}, {settings.getPanel().width(), settings.getPanel().height()},
+                        {keyboard.getPanel().width(), keyboard.getPanel().height()}});
             }
             catch (RuntimeException failed)
             {
                 recorder.close();
                 throw failed;
             }
+        }
+
+        private boolean fitsInterfaces(int width, int height)
+        {
+            return width == interfacesWidth && height == interfacesHeight;
         }
 
         private boolean due(long nowNanos)
@@ -427,18 +447,16 @@ final class Recording implements AutoCloseable
                 for (int strip = 0; strip < shown.strips.length; strip++)
                 {
                     double[] across = shown.stripsAcross[strip];
-                    int left = (int) Math.round(across[0] * shown.interfacesWidth);
-                    int right = (int) Math.round(across[1] * shown.interfacesWidth);
-                    quad.draw(worldToClip, shown.strips[strip], shown.interfaces, shown.interfacesWidth, shown.interfacesHeight, left, 0, right - left,
-                            shown.interfacesHeight, 1);
+                    int left = (int) Math.round(across[0] * interfacesWidth);
+                    int right = (int) Math.round(across[1] * interfacesWidth);
+                    interfaces.draw(worldToClip, shown.strips[strip], left, 0, right - left, interfacesHeight, 1);
                 }
             }
-            for (int index = 0; index < FLOATING; index++)
+            for (int index = 0; index < floating.length; index++)
             {
                 if (shown.floating[index] != null)
                 {
-                    int[] size = shown.floatingSizes[index];
-                    quad.draw(worldToClip, shown.floating[index], shown.floatingPictures[index], size[0], size[1], 0, 0, size[0], size[1], 1);
+                    floating[index].draw(worldToClip, shown.floating[index], 0, 0, floatingSizes[index][0], floatingSizes[index][1], 1);
                 }
             }
         }
@@ -471,7 +489,11 @@ final class Recording implements AutoCloseable
             {
                 spectatorTarget.close();
             }
-            quad.close();
+            interfaces.close();
+            for (AtlasQuad quad : floating)
+            {
+                quad.close();
+            }
         }
     }
 }

@@ -35,19 +35,6 @@ final class AtlasQuad implements AutoCloseable
      */
     AtlasQuad(int width, int height)
     {
-        this(width, height, true);
-    }
-
-    /**
-     * Creates only the program, for drawing pictures held in other textures.
-     */
-    AtlasQuad()
-    {
-        this(1, 1, false);
-    }
-
-    private AtlasQuad(int width, int height, boolean ownPicture)
-    {
         this.width = width;
         this.height = height;
         program = Shaders.program("atlas.vert", "atlas.frag");
@@ -65,11 +52,6 @@ final class AtlasQuad implements AutoCloseable
         GL20.glVertexAttribPointer(1, 2, GL11.GL_FLOAT, false, 5 * Float.BYTES, 3L * Float.BYTES);
         GL30.glBindVertexArray(0);
 
-        if (!ownPicture)
-        {
-            texture = 0;
-            return;
-        }
         int bound = GL11.glGetInteger(GL11.GL_TEXTURE_BINDING_2D);
         texture = GL11.glGenTextures();
         GL11.glBindTexture(GL11.GL_TEXTURE_2D, texture);
@@ -107,29 +89,10 @@ final class AtlasQuad implements AutoCloseable
      */
     void draw(float[] worldToClip, double[][] corners, int left, int top, int cellWidth, int cellHeight, float fade)
     {
-        draw(worldToClip, corners, texture, width, height, left, top, cellWidth, cellHeight, fade);
-    }
-
-    /**
-     * Draws a cell of another texture's picture between four world corners.
-     *
-     * @param worldToClip   The view's matrix.
-     * @param corners       The top left, top right, bottom right and bottom left corners.
-     * @param picture       The texture, premultiplied, first row at the top.
-     * @param pictureWidth  The picture width, in pixels.
-     * @param pictureHeight The picture height, in pixels.
-     * @param left          The cell's left edge, in pixels.
-     * @param top           The cell's top edge.
-     * @param cellWidth     The cell width.
-     * @param cellHeight    The cell height.
-     * @param fade          How much shows, 0 to 1.
-     */
-    void draw(float[] worldToClip, double[][] corners, int picture, int pictureWidth, int pictureHeight, int left, int top, int cellWidth, int cellHeight, float fade)
-    {
-        float u0 = (float) left / pictureWidth;
-        float u1 = (float) (left + cellWidth) / pictureWidth;
-        float v0 = (float) top / pictureHeight;
-        float v1 = (float) (top + cellHeight) / pictureHeight;
+        float u0 = (float) left / width;
+        float u1 = (float) (left + cellWidth) / width;
+        float v0 = (float) top / height;
+        float v1 = (float) (top + cellHeight) / height;
         try (MemoryStack stack = MemoryStack.stackPush())
         {
             FloatBuffer vertices = stack.mallocFloat(6 * 5);
@@ -145,7 +108,7 @@ final class AtlasQuad implements AutoCloseable
             GL20.glUniform1i(atlasAt, 0);
             GL20.glUniform1f(fadeAt, fade);
             GL13.glActiveTexture(GL13.GL_TEXTURE0);
-            GL11.glBindTexture(GL11.GL_TEXTURE_2D, picture);
+            GL11.glBindTexture(GL11.GL_TEXTURE_2D, texture);
             GL30.glBindVertexArray(vertexArray);
             GL15.glBindBuffer(GL15.GL_ARRAY_BUFFER, buffer);
             GL15.glBufferSubData(GL15.GL_ARRAY_BUFFER, 0, vertices);
@@ -173,10 +136,7 @@ final class AtlasQuad implements AutoCloseable
             return;
         }
         closed = true;
-        if (texture != 0)
-        {
-            GL11.glDeleteTextures(texture);
-        }
+        GL11.glDeleteTextures(texture);
         GL15.glDeleteBuffers(buffer);
         GL30.glDeleteVertexArrays(vertexArray);
         GL20.glDeleteProgram(program);
