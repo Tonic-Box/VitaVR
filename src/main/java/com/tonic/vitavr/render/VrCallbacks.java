@@ -168,7 +168,6 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
     private double tableReach;
     private long lastFrameNanos;
     private boolean frameBegun;
-    private boolean frameDrawn;
     private boolean placed;
     private boolean drawingEyes;
     private boolean eyesDrawn;
@@ -243,7 +242,7 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
             return;
         }
         long waitFrom = System.nanoTime();
-        frameDrawn = headset.beginFrame();
+        boolean frameDrawn = headset.beginFrame();
         long waited = System.nanoTime();
         times.begin(waited);
         times.add(FrameTimes.Part.WAIT, waited - waitFrom);
@@ -721,7 +720,7 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
         int plane = client.getTopLevelWorldView().getPlane();
         if (config.outlineHoveredTile() && pointer.isOnWorld())
         {
-            Tile hovered = client.getSelectedSceneTile();
+            Tile hovered = client.getTopLevelWorldView().getSelectedSceneTile();
             if (hovered != null)
             {
                 outline(hovered.getLocalLocation(), plane, HOVERED_TILE);
@@ -747,7 +746,7 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
      */
     private void outline(LocalPoint centre, int plane, int rgba)
     {
-        if (centre == null || !centre.isInScene())
+        if (centre == null || !client.getTopLevelWorldView().contains(centre))
         {
             return;
         }
@@ -1331,13 +1330,6 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
     public void despawnWorldView(WorldView worldView)
     {
         gpu.despawnWorldView(worldView);
-    }
-
-    @Override
-    public void preSceneDraw(Scene scene, float cameraX, float cameraY, float cameraZ, float cameraPitch, float cameraYaw, int minLevel, int level, int maxLevel,
-                             Set<Integer> hideRoofIds)
-    {
-        gpu.preSceneDraw(scene, cameraX, cameraY, cameraZ, cameraPitch, cameraYaw, minLevel, level, maxLevel, hideRoofIds);
     }
 
     @Override

@@ -11,6 +11,7 @@ import com.tonic.vitavr.xr.RoomPanel;
 import com.tonic.vitavr.wrist.WristDisplay;
 import lombok.Getter;
 import net.runelite.api.Client;
+import net.runelite.api.Menu;
 import net.runelite.api.MenuAction;
 
 import java.util.Collections;
@@ -252,7 +253,8 @@ public final class Pointer
         menuCursor = at;
         if (at != null)
         {
-            mouse.moveTo(client.getMenuX() + at[0], client.getMenuY() + at[1]);
+            Menu shown = client.getMenu();
+            mouse.moveTo(shown.getMenuX() + at[0], shown.getMenuY() + at[1]);
             if (controllers.triggerPressed(activeHand))
             {
                 mouse.press(false, ctrl);
@@ -277,9 +279,10 @@ public final class Pointer
      */
     private void closeMenu()
     {
-        int left = client.getMenuX();
-        int x = left >= CLOSE_OUTSIDE ? left - CLOSE_OUTSIDE : left + client.getMenuWidth() + CLOSE_OUTSIDE;
-        mouse.moveTo(x, client.getMenuY() + client.getMenuHeight() / 2);
+        Menu shown = client.getMenu();
+        int left = shown.getMenuX();
+        int x = left >= CLOSE_OUTSIDE ? left - CLOSE_OUTSIDE : left + shown.getMenuWidth() + CLOSE_OUTSIDE;
+        mouse.moveTo(x, shown.getMenuY() + shown.getMenuHeight() / 2);
         menu.end();
     }
 

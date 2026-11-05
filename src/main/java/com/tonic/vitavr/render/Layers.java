@@ -21,6 +21,7 @@ import com.tonic.vitavr.xr.HudPanel;
 import com.tonic.vitavr.xr.RoomPanel;
 import lombok.Getter;
 import net.runelite.api.Client;
+import net.runelite.api.Menu;
 import net.runelite.api.gameval.InterfaceID;
 import net.runelite.api.gameval.VarClientID;
 import net.runelite.api.widgets.Widget;
@@ -206,10 +207,11 @@ final class Layers implements AutoCloseable
         readyPanel(picture.getWidth(), picture.getHeight());
 
         WorldMenu menu = pointer.getMenu();
-        if (client.isMenuOpen() && menu.lift(picture.getPixels(), picture.getWidth(), picture.getHeight(), client.getMenuX(), client.getMenuY(),
-                client.getMenuWidth(), client.getMenuHeight(), head))
+        Menu shown = client.getMenu();
+        if (client.isMenuOpen() && menu.lift(picture.getPixels(), picture.getWidth(), picture.getHeight(), shown.getMenuX(), shown.getMenuY(),
+                shown.getMenuWidth(), shown.getMenuHeight(), head))
         {
-            picture.clear(client.getMenuX(), client.getMenuY(), client.getMenuWidth(), client.getMenuHeight());
+            picture.clear(shown.getMenuX(), shown.getMenuY(), shown.getMenuWidth(), shown.getMenuHeight());
             int[] onMenu = pointer.getMenuCursor();
             if (onMenu != null)
             {

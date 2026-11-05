@@ -28,7 +28,6 @@ public class VitaVRPlugin extends Plugin
     @Inject
     private VrSession session;
 
-    private SidePanel panel;
     private NavigationButton navButton;
 
     @Provides
@@ -40,7 +39,7 @@ public class VitaVRPlugin extends Plugin
     @Override
     protected void startUp()
     {
-        panel = injector.getInstance(SidePanel.class);
+        SidePanel panel = injector.getInstance(SidePanel.class);
 
         final BufferedImage icon = ImageUtil.loadImageResource(getClass(), "icon.png");
 

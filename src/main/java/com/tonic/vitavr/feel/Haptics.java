@@ -127,10 +127,6 @@ public final class Haptics
         Skill[] skills = Skill.values();
         for (int skill = 0; skill < skills.length; skill++)
         {
-            if (skills[skill] == Skill.OVERALL)
-            {
-                continue;
-            }
             int level = client.getRealSkillLevel(skills[skill]);
             rose |= levels[skill] > 0 && level > levels[skill];
             levels[skill] = level;
