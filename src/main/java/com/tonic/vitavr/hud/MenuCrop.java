@@ -9,11 +9,8 @@ import java.util.Arrays;
  */
 public final class MenuCrop
 {
-    @Getter
     private final int width;
-    @Getter
     private final int height;
-    @Getter
     private final int[] pixels;
     @Getter
     private int cropWidth;
@@ -29,6 +26,14 @@ public final class MenuCrop
         this.width = width;
         this.height = height;
         this.pixels = new int[width * height];
+    }
+
+    /**
+     * @return The cropped menu, ARGB, rows from the top.
+     */
+    public int[] getPixels()
+    {
+        return pixels;
     }
 
     /**
