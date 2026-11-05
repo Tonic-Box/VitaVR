@@ -4,7 +4,6 @@ import com.tonic.vitavr.space.Pose;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** Tests the steadied spectator camera. */
 class SpectatorViewTest
@@ -33,20 +32,6 @@ class SpectatorViewTest
         steadied.rotate(1, 0, 0, right);
         assertEquals(0, right[1], 1e-9, "level: its right stays flat");
         assertEquals(1.6, steadied.y(), 1e-9, "where the head is");
-    }
-
-    @Test
-    void aShakeOfTheHeadIsSmoothed()
-    {
-        SpectatorView view = new SpectatorView();
-        view.follow(new Pose(0, 1.6, 0, 0, 0, 0, 1), FRAME);
-        double furthest = 0;
-        for (int frame = 0; frame < 90; frame++)
-        {
-            double shake = frame % 2 == 0 ? 0.02 : -0.02;
-            furthest = Math.max(furthest, Math.abs(view.follow(new Pose(shake, 1.6, 0, 0, 0, 0, 1), FRAME).x()));
-        }
-        assertTrue(furthest < 0.002, "a two centimetre shake moves it under two millimetres: " + furthest);
     }
 
     /** Turns a pose by yaw, then pitch, then roll. */

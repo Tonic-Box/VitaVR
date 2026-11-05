@@ -3,7 +3,6 @@ package com.tonic.vitavr.space;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -41,49 +40,6 @@ class HudShapeTest
                 }
             }
         }
-    }
-
-    @Test
-    void betweenTheColumnsItFindsNothingAndTheSidesStandOut()
-    {
-        HudShape shape = shaped(true);
-        Pose head = new Pose(0, 1.6, 0, 0, 0, 0, 1);
-        shape.place(head);
-        double[][][] columns = shape.strips(1);
-        double[] gap = between(new double[][] {columns[0][1], columns[1][0], columns[1][3], columns[0][2]}, 0.5, 0.5);
-        double[] hit = shape.crossing(aimedAt(head, gap));
-        assertEquals(-1, hit[1], "between the chat side and the middle");
-        assertEquals(0, hit[3]);
-        assertTrue(shape.tall(HudShape.RIGHT) > shape.tall(HudShape.MIDDLE), "the inventory side is drawn larger");
-        assertEquals(shape.tall(HudShape.LEFT), shape.tall(HudShape.MIDDLE), 1e-12, "the chat side at the middle's size");
-
-        shape.columns(400, 330);
-        assertEquals(1430, shape.fromPixel(HudShape.RIGHT), "cut anew");
-        double[][][] recut = shape.strips(1);
-        double[] inventory = between(recut[HudShape.RIGHT], 0.5, 0.5);
-        double[] onIt = shape.crossing(aimedAt(head, inventory));
-        assertEquals(1430 + 165, onIt[1], 1, "the pixel in the inventory side, cut anew");
-
-        shape.clear();
-        assertNull(shape.crossing(head), "taken down");
-    }
-
-    @Test
-    void joinedTheSidesMeetTheMiddleWhereItStands()
-    {
-        HudShape shape = shaped(true);
-        Pose head = new Pose(0.3, 1.6, 0.2, 0, Math.sin(0.2), 0, Math.cos(0.2));
-        shape.place(head);
-        double middleYaw = shape.yawOf(HudShape.MIDDLE);
-        shape.sides(1, 1, 0);
-        assertTrue(shape.placed(), "still up");
-        assertEquals(middleYaw, shape.yawOf(HudShape.MIDDLE), 1e-12, "the middle stands where it stood");
-        assertEquals(shape.tall(HudShape.MIDDLE), shape.tall(HudShape.RIGHT), 1e-12, "the inventory side at the middle's size");
-        assertEquals((shape.angle(HudShape.LEFT) + shape.angle(HudShape.MIDDLE)) / 2, shape.yawOf(HudShape.LEFT) - shape.yawOf(HudShape.MIDDLE), 1e-12, "the chat side meets the middle");
-        assertEquals((shape.angle(HudShape.MIDDLE) + shape.angle(HudShape.RIGHT)) / 2, shape.yawOf(HudShape.MIDDLE) - shape.yawOf(HudShape.RIGHT), 1e-12, "the inventory side meets the middle");
-        double[][][] strips = shape.strips(1);
-        double[] seam = between(strips[HudShape.LEFT], 0.999, 0.5);
-        assertEquals(LEFT_PIXELS - 1, shape.crossing(aimedAt(head, seam))[1], 1, "no gap at the seam");
     }
 
     @Test

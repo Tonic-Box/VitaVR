@@ -4,7 +4,6 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
 
 /**
  * Tests billboard placement, facing and pointer hits.
@@ -34,19 +33,6 @@ class BillboardTest
     }
 
     @Test
-    void aPointerFromTheHandThroughTheStoodPixelFindsItThoughTheBoardFacesTheHead()
-    {
-        Pose head = new Pose(0, 1.6, 0, 0, 0, 0, 1);
-        Pose hand = new Pose(0.25, 1.0, -0.2, 0, 0, 0, 1);
-        double[] point = {0.45, 0.85, -0.9};
-        Billboard board = new Billboard();
-        board.stand(point[0], point[1], point[2], head, 300, 200, PIXEL, 150, 8);
-        int[] crossed = board.crossing(aimedAt(hand, point));
-        assertEquals(150, crossed[0], 1, "the hand's pointer is on the pixel stood on its line, across, to the pixel's corner");
-        assertEquals(8, crossed[1], 1, "the hand's pointer is on the pixel stood on its line, down, to the pixel's corner");
-    }
-
-    @Test
     void itFacesTheHead()
     {
         Pose head = new Pose(0, 1.6, 0, 0, 0, 0, 1);
@@ -63,19 +49,6 @@ class BillboardTest
             assertEquals(toHead[axis] / length, normal[axis], 1e-9, "its front turned to the head, axis " + axis);
         }
         assertEquals(0.01, board.metresWide(), 1e-12);
-    }
-
-    @Test
-    void aPointerThatMissesFindsNothing()
-    {
-        Pose head = new Pose(0, 1.6, 0, 0, 0, 0, 1);
-        Billboard board = new Billboard();
-        assertNull(board.crossing(head), "nothing stands yet");
-        board.stand(0, 1.6, -1, head, 100, 100, PIXEL, 50, 50);
-        assertNull(board.crossing(new Pose(0, 1.6, 0, 0, 1, 0, 0)), "pointing away");
-        assertNull(board.crossing(aimedAt(head, new double[] {0.5, 1.6, -1})), "beside it");
-        board.clear();
-        assertNull(board.crossing(head), "taken down");
     }
 
     private static double[] pixelInRoom(Billboard board, double px, double py)

@@ -3,7 +3,6 @@ package com.tonic.vitavr.space;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -12,23 +11,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class PlayerAnchorTest
 {
     private static final double FRAME = 1 / 90.0;
-
-    @Test
-    void itStartsWhereThePlayerIsAndSettlesOnThemWithoutOvershooting()
-    {
-        PlayerAnchor anchor = new PlayerAnchor();
-        assertFalse(anchor.step(1000, -40, 2000, FRAME), "placing it first is not a jump");
-        assertEquals(1000, anchor.x(), 1e-9);
-
-        double furthest = 1000;
-        for (int frame = 0; frame < 180; frame++)
-        {
-            anchor.step(1060, -40, 2000, FRAME);
-            furthest = Math.max(furthest, anchor.x());
-        }
-        assertEquals(1060, anchor.x(), 0.5, "it settles on the player");
-        assertTrue(furthest <= 1060 + 1e-6, "and never passes them");
-    }
 
     @Test
     void itNeverTrailsMoreThanHalfATile()

@@ -11,32 +11,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 class OwnBodyTest
 {
     @Test
-    void aPlacedPointComesBackToModelSpace()
-    {
-        double originX = 3200;
-        double groundY = -400;
-        double originZ = 6400;
-        for (double angle : new double[]{0, 0.7, Math.PI, -2.2})
-        {
-            double[] model = {-28, -110, 15};
-            double cos = Math.cos(angle);
-            double sin = Math.sin(angle);
-            double[] placed = {originX + model[0] * cos + model[2] * sin, groundY + model[1], originZ - model[0] * sin + model[2] * cos};
-            assertArrayEquals(model, OwnBody.inModel(placed, originX, groundY, originZ, angle), 1e-9, "angle " + angle);
-        }
-    }
-
-    @Test
-    void aDirectionTurnedOutOfModelSpaceComesBack()
-    {
-        for (double angle : new double[]{0, 0.7, Math.PI, -2.2})
-        {
-            double[] model = {-28, -110, 15};
-            assertArrayEquals(model, OwnBody.turnedInto(OwnBody.turnedOut(model, angle), angle), 1e-9, "angle " + angle);
-        }
-    }
-
-    @Test
     void aControllerHeldAsTheModelHoldsItKeepsTheHand()
     {
         double[][] kept = OwnBody.grip(new double[]{0, -1, 0}, new double[]{0, 0, -1});

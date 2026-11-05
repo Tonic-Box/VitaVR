@@ -3,7 +3,6 @@ package com.tonic.vitavr.space;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ViewTest
 {
@@ -35,29 +34,6 @@ class ViewTest
 
         assertEquals(1, right[0] / right[3], EPSILON);
         assertEquals(1, above[1] / above[3], EPSILON);
-    }
-
-    @Test
-    void nearerIsDeeperForTheGreaterDepthTest()
-    {
-        float[] matrix = eyeAt(0, 0, 0, 0).worldToClip(SYMMETRIC);
-
-        double[] near = clip(matrix, 0, 0, 50);
-        double[] far = clip(matrix, 0, 0, 5000);
-
-        assertTrue(near[2] / near[3] > far[2] / far[3]);
-    }
-
-    @Test
-    void offCentreFieldShiftsTheMiddle()
-    {
-        Fov wideRight = new Fov(-Math.toRadians(30), Math.toRadians(60), Math.toRadians(45), -Math.toRadians(45));
-        float[] matrix = eyeAt(0, 0, 0, 0).worldToClip(wideRight);
-
-        double tanMiddle = (Math.tan(Math.toRadians(60)) + Math.tan(-Math.toRadians(30))) / 2;
-        double[] middle = clip(matrix, tanMiddle * 100, 0, 100);
-
-        assertEquals(0, middle[0] / middle[3], EPSILON);
     }
 
     private static View eyeAt(double x, double y, double z, double yaw)

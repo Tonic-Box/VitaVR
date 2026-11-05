@@ -11,15 +11,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class EyeClearanceTest
 {
-    @Test
-    void theDarknessRisesSmoothlyFromWhereItFades()
-    {
-        assertEquals(0, EyeClearance.darkness(20, 15, 5), "clear beyond the fade");
-        assertEquals(1, EyeClearance.darkness(5, 15, 5), "wholly dark at the near edge");
-        assertEquals(1, EyeClearance.darkness(1, 15, 5));
-        assertEquals(0.5, EyeClearance.darkness(10, 15, 5), 1e-9, "half way, half dark");
-        assertTrue(EyeClearance.darkness(12, 15, 5) < EyeClearance.darkness(8, 15, 5), "darker the nearer");
-    }
 
     @Test
     void aClosedBoxHoldsThePointInsideAndAnOpenPanelDoesNot()

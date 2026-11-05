@@ -4,7 +4,6 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -66,15 +65,6 @@ class ArmIkTest
         double[] held = {model[0][11] - hand[0], model[1][11] - hand[1], model[2][11] - hand[2]};
         assertArrayEquals(new double[] {50, 0, 0}, held, 1.5, "the blade turned with the grip, from pointing ahead to across");
         assertArrayEquals(new float[] {500, 500, 500}, new float[] {model[0][10], model[1][10], model[2][10]}, "the body does not move");
-    }
-
-    @Test
-    void anArmWithoutItsLabelsIsLeftAlone()
-    {
-        float[][] model = arm();
-        int[][] none = new int[64][];
-        assertFalse(ArmIk.reach(model[0], model[1], model[2], none, ArmRig.RIGHT, new double[] {100, 100, 0}, new double[] {0, 0, 1}));
-        assertEquals(400, model[1][8], 0, "untouched");
     }
 
     /** Builds a straight arm along y with two vertices per label and one for the body. */

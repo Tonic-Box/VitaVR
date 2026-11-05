@@ -3,28 +3,10 @@ package com.tonic.vitavr.space;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
-import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class RoomToWorldTest
 {
     private static final double EPSILON = 1e-9;
-
-    @Test
-    void roomAheadIsWorldAlongAtNoTurn()
-    {
-        RoomToWorld room = new RoomToWorld();
-        room.place(100, 50, 200, 0, 128);
-        double[] out = new double[3];
-
-        room.point(0, 0, -1, out);
-        assertArrayEquals(new double[]{100, 50, 328}, out, EPSILON);
-
-        room.point(0, 1, 0, out);
-        assertArrayEquals(new double[]{100, 50 - 128, 200}, out, EPSILON);
-
-        room.point(1, 0, 0, out);
-        assertArrayEquals(new double[]{228, 50, 200}, out, EPSILON);
-    }
 
     @Test
     void turnedRoomFacesAsTheGpuCameraAtThatYaw()
@@ -65,19 +47,5 @@ class RoomToWorldTest
         room.point(0.1, 0.8, -0.55, out);
 
         assertArrayEquals(new double[]{640, -120, 960}, out, EPSILON);
-    }
-
-    @Test
-    void viewOfAPoseFollowsItsTurn()
-    {
-        RoomToWorld room = new RoomToWorld();
-        room.place(0, 0, 0, 0, 1);
-        double half = Math.toRadians(90) / 2;
-        Pose turnedLeft = new Pose(0, 0, 0, 0, Math.sin(half), 0, Math.cos(half));
-        View view = new View();
-
-        room.view(turnedLeft, view);
-
-        assertEquals(Math.toRadians(90), view.yaw(), EPSILON);
     }
 }

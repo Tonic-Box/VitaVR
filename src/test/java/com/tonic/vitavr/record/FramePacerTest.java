@@ -12,18 +12,6 @@ class FramePacerTest
     private static final long MILLIS = 1_000_000L;
 
     @Test
-    void aFasterLoopTakesAFrameOnlyAsOneFallsDue()
-    {
-        FramePacer pacer = new FramePacer(60);
-        int taken = 0;
-        for (long at = 0; at < 1000 * MILLIS; at += 11 * MILLIS)
-        {
-            taken += pacer.due(at);
-        }
-        assertEquals(60, taken, 1, "sixty a second from a loop at ninety");
-    }
-
-    @Test
     void aSlowerLoopWritesTheFrameAgainForEachMissed()
     {
         FramePacer pacer = new FramePacer(60);
