@@ -266,6 +266,12 @@ public final class SettingsPanel extends AbstractPanel
     @Override
     protected Rectangle bounds(int target)
     {
+        boolean row = target != doneTarget() && target >= tabs();
+        return row && rows.get((target - tabs()) / 2).tab != tab ? null : rectangle(target);
+    }
+
+    private Rectangle rectangle(int target)
+    {
         if (target == doneTarget())
         {
             return new Rectangle((WIDTH - DONE_WIDTH) / 2, HEIGHT - PAD - DONE_HEIGHT, DONE_WIDTH, DONE_HEIGHT);
@@ -276,10 +282,6 @@ public final class SettingsPanel extends AbstractPanel
             return new Rectangle(PAD + target * width, TITLE, width - TAB_SPACE, TAB_HEIGHT);
         }
         int index = (target - tabs()) / 2;
-        if (rows.get(index).tab != tab)
-        {
-            return null;
-        }
         int top = ROWS_TOP + placeInTab(index) * ROW + (ROW - ARROW) / 2;
         int right = WIDTH - PAD;
         int x = (target - tabs()) % 2 == 0 ? right - ARROW - VALUE - ARROW : right - ARROW;
@@ -326,7 +328,7 @@ public final class SettingsPanel extends AbstractPanel
         }
         for (Tab each : Tab.values())
         {
-            Rectangle bounds = bounds(each.ordinal());
+            Rectangle bounds = rectangle(each.ordinal());
             g.setColor(each == tab ? CHOSEN : hovered() == each.ordinal() ? LIT : BUTTON);
             g.fillRoundRect(bounds.x, bounds.y, bounds.width, bounds.height, 8, 8);
             g.setFont(FONT);
@@ -340,7 +342,7 @@ public final class SettingsPanel extends AbstractPanel
                 paintRow(g, index, rows.get(index));
             }
         }
-        Rectangle done = bounds(doneTarget());
+        Rectangle done = rectangle(doneTarget());
         button(g, done, hovered() == doneTarget());
         g.setFont(FONT);
         g.setColor(TEXT);
@@ -355,8 +357,8 @@ public final class SettingsPanel extends AbstractPanel
         g.setColor(TEXT);
         g.drawString(row.name + (row.nextLaunch ? " *" : ""), PAD, middle + metrics.getAscent() / 2 - 2);
         int down = tabs() + index * 2;
-        Rectangle lower = bounds(down);
-        Rectangle upper = bounds(down + 1);
+        Rectangle lower = rectangle(down);
+        Rectangle upper = rectangle(down + 1);
         button(g, lower, hovered() == down);
         button(g, upper, hovered() == down + 1);
         g.setColor(TEXT);

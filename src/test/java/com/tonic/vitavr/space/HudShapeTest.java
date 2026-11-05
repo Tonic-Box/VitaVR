@@ -3,6 +3,7 @@ package com.tonic.vitavr.space;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -34,6 +35,7 @@ class HudShapeTest
                     double[] point = between(strip, across, 0.3);
                     double[] hit = shape.crossing(aimedAt(head, point));
                     String where = (curved ? "curved" : "flat") + " column " + column + " pixel " + pixel;
+                    assertNotNull(hit, where);
                     assertEquals(shape.fromPixel(column) + pixel, hit[1], 1, where + " across");
                     assertEquals(HEIGHT * 0.3, hit[2], 1, where + " down");
                     assertEquals(1, hit[3], where + " is on it");

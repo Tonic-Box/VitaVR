@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -26,6 +27,9 @@ class ArmIkTest
         double[] hand = ArmIk.centroid(model[0], model[1], model[2], groups(), 27);
         double[] elbow = ArmIk.centroid(model[0], model[1], model[2], groups(), 17);
         double[] shoulder = ArmIk.centroid(model[0], model[1], model[2], groups(), 21);
+        assertNotNull(hand);
+        assertNotNull(elbow);
+        assertNotNull(shoulder);
         assertArrayEquals(target, hand, 1.5, "the hand on the point");
         assertEquals(200, distance(shoulder, elbow), 1.5, "the upper arm keeps its length");
         assertEquals(200, distance(elbow, hand), 1.5, "the forearm keeps its length");
@@ -40,6 +44,7 @@ class ArmIkTest
         float[][] model = arm();
         assertTrue(ArmIk.reach(model[0], model[1], model[2], groups(), ArmRig.RIGHT, new double[] {1000, 0, 0}, new double[] {0, 1, 0}));
         double[] hand = ArmIk.centroid(model[0], model[1], model[2], groups(), 27);
+        assertNotNull(hand);
         assertEquals(400, hand[0], 1.5, "straight out towards it, as far as the arm goes");
         assertEquals(0, hand[1], 1.5);
         assertEquals(0, hand[2], 1.5);
@@ -61,6 +66,7 @@ class ArmIkTest
         assertTrue(ArmIk.reach(model[0], model[1], model[2], groups(), ArmRig.RIGHT, target, new double[] {0, 0, 1}, new int[] {11}, grip));
 
         double[] hand = ArmIk.centroid(model[0], model[1], model[2], groups(), 27);
+        assertNotNull(hand);
         assertArrayEquals(target, hand, 1.5, "the hand still on the point");
         double[] held = {model[0][11] - hand[0], model[1][11] - hand[1], model[2][11] - hand[2]};
         assertArrayEquals(new double[] {50, 0, 0}, held, 1.5, "the blade turned with the grip, from pointing ahead to across");

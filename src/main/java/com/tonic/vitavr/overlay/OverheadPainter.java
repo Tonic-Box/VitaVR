@@ -5,6 +5,7 @@ import net.runelite.api.Client;
 import net.runelite.api.HeadIcon;
 import net.runelite.api.NPC;
 import net.runelite.api.Player;
+import net.runelite.api.SpritePixels;
 import net.runelite.api.gameval.SpriteID;
 
 import java.awt.AlphaComposite;
@@ -321,7 +322,7 @@ final class OverheadPainter
         Composite composite = g.getComposite();
         if (alpha < 255)
         {
-            g.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, Math.max(0, Math.min(255, alpha)) / 255f));
+            g.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, Math.max(0, alpha) / 255f));
         }
         drawSprite(g, left, type.getLeftSpriteId(), splatX + leftAt, splatY);
         drawSprite(g, left2, type.getLeftSprite2Id(), splatX + left2At, splatY);
@@ -339,11 +340,12 @@ final class OverheadPainter
      */
     private void drawSprite(Graphics2D g, BufferedImage image, int spriteId, int x, int y)
     {
-        if (image == null)
+        SpritePixels sprite = art.sprite(spriteId, 0);
+        if (image == null || sprite == null)
         {
             return;
         }
-        g.drawImage(image, x - art.sprite(spriteId, 0).getOffsetX(), y, null);
+        g.drawImage(image, x - sprite.getOffsetX(), y, null);
     }
 
     /**
