@@ -7,14 +7,13 @@ import java.util.Arrays;
 /**
  * A menu cropped from the HUD picture into its own picture, from the top left.
  */
+@Getter
 public final class MenuCrop
 {
     private final int width;
     private final int height;
     private final int[] pixels;
-    @Getter
     private int cropWidth;
-    @Getter
     private int cropHeight;
 
     /**
@@ -26,14 +25,6 @@ public final class MenuCrop
         this.width = width;
         this.height = height;
         this.pixels = new int[width * height];
-    }
-
-    /**
-     * @return The cropped menu, ARGB, rows from the top.
-     */
-    public int[] getPixels()
-    {
-        return pixels;
     }
 
     /**

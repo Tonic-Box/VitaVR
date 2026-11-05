@@ -8,16 +8,14 @@ import java.util.Arrays;
 /**
  * A copy of the interfaces the game drew this frame, clear where the world shows through.
  */
+@Getter
 public final class HudPicture
 {
     /** Minimum alpha for the pointer to count as on an interface. */
     private static final int OPAQUE_ENOUGH = 24;
 
-    @Getter
     private int width;
-    @Getter
     private int height;
-    @Getter
     private int[] pixels = new int[0];
 
     /**

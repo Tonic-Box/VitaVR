@@ -1,6 +1,7 @@
 package com.tonic.vitavr.xr;
 
 import com.tonic.vitavr.space.Billboard;
+import lombok.Getter;
 import org.lwjgl.openxr.XR10;
 import org.lwjgl.openxr.XrCompositionLayerQuad;
 import org.lwjgl.opengl.GL11;
@@ -20,6 +21,7 @@ public final class FloatingLayer implements AutoCloseable
     private final IntBuffer flipped;
     private final int width;
     private final int height;
+    @Getter
     private boolean cleared;
     private boolean closed;
 
@@ -90,14 +92,6 @@ public final class FloatingLayer implements AutoCloseable
         GL11.glTexSubImage2D(GL11.GL_TEXTURE_2D, 0, 0, 0, width, height, GL12.GL_BGRA, GL12.GL_UNSIGNED_INT_8_8_8_8_REV, flipped);
         GL11.glBindTexture(GL11.GL_TEXTURE_2D, bound);
         images.release();
-    }
-
-    /**
-     * @return Whether the layer has been cleared since the last upload.
-     */
-    public boolean isCleared()
-    {
-        return cleared;
     }
 
     /**

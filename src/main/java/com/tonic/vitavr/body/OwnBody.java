@@ -65,6 +65,7 @@ public final class OwnBody
     private TrackedHand rightHand;
     private TrackedHand leftHand;
     private double seconds;
+    @Getter
     private double[][] leftWrist;
 
     private int[] hiddenFaces = new int[64];
@@ -151,7 +152,7 @@ public final class OwnBody
         boolean following = follow == HeadFollow.ALWAYS || follow == HeadFollow.ACTIONS && acting && !moving;
         for (int axis = 0; axis < 3; axis++)
         {
-            viewShift[axis] = eased(viewShift[axis], following ? headMoved[axis] : 0, seconds, FOLLOW_SECONDS);
+            viewShift[axis] = eased(viewShift[axis], following ? headMoved[axis] : 0, seconds);
         }
         return viewShift.clone();
     }
@@ -204,7 +205,7 @@ public final class OwnBody
             return;
         }
         measure(player, model, groups);
-        double[] head = centroid(model, groups, HEAD);
+        double[] head = centroid(model, groups);
         if (head != null && restHead != null)
         {
             noteHead(head, orientation);
@@ -260,7 +261,7 @@ public final class OwnBody
         }
         measured = key;
         measuredWithSlots = slotFaces != null;
-        double[] head = centroid(model, groups, HEAD);
+        double[] head = centroid(model, groups);
         eyeHeight = head == null || head[1] >= 0 ? USUAL_EYE_HEIGHT : -head[1];
         restHead = head;
         parts = BodyParts.of(model, groups, slotFaces);
@@ -341,17 +342,6 @@ public final class OwnBody
         placed[1] += y;
         placed[2] += z;
         return new double[][]{placed, turnedOut(along, angle), turnedOut(out, angle)};
-    }
-
-    /**
-     * Gets the left wrist from the last drawn frame.
-     *
-     * @return The surface point, forearm direction and surface normal, across, down and along, or null if the arms
-     * did not follow.
-     */
-    public double[][] getLeftWrist()
-    {
-        return leftWrist;
     }
 
     /**
@@ -537,13 +527,13 @@ public final class OwnBody
         return turnedInto(new double[]{point[0] - originX, point[1] - groundY, point[2] - originZ}, angle);
     }
 
-    private static double[] centroid(Model model, int[][] groups, int label)
+    private static double[] centroid(Model model, int[][] groups)
     {
-        return ArmIk.centroid(model.getVerticesX(), model.getVerticesY(), model.getVerticesZ(), groups, label);
+        return ArmIk.centroid(model.getVerticesX(), model.getVerticesY(), model.getVerticesZ(), groups, OwnBody.HEAD);
     }
 
-    private static double eased(double from, double to, double seconds, double timeConstant)
+    private static double eased(double from, double to, double seconds)
     {
-        return from + (to - from) * (1 - Math.exp(-Math.max(0, seconds) / timeConstant));
+        return from + (to - from) * (1 - Math.exp(-Math.max(0, seconds) / OwnBody.FOLLOW_SECONDS));
     }
 }
