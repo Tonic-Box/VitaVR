@@ -14,6 +14,7 @@ import com.tonic.vitavr.space.Billboard;
 import com.tonic.vitavr.space.Pose;
 import com.tonic.vitavr.space.View;
 import com.tonic.vitavr.space.placement.Placement;
+import com.tonic.vitavr.ui.StreamWindow;
 import lombok.Getter;
 import net.runelite.client.RuneLite;
 
@@ -26,7 +27,8 @@ import java.util.Arrays;
 import java.util.List;
 
 /**
- * Records the session to a 1920 by 1080 video of the composite picture: both eyes, the cropped left eye, or a steadied head camera, with the headset layers drawn in.
+ * Sends the composite picture, both eyes, the cropped left eye, or a steadied head camera with the headset layers drawn in,
+ * to a 1920 by 1080 video of the session and to the stream window, building it once a frame when either is due.
  */
 public final class Recording implements AutoCloseable
 {
@@ -36,9 +38,12 @@ public final class Recording implements AutoCloseable
     private final Layers layers;
     private final Placement placement;
     private final FrameTimes times;
+    private final StreamWindow window;
     private final FramePacer recordPacer = new FramePacer(SessionRecorder.FRAMES_PER_SECOND);
     private Composite composite;
     private SessionRecorder recorder;
+    private StreamOutput stream;
+    private boolean streamDue;
     private boolean tried;
     private int recordTimes;
     private boolean due;
@@ -61,21 +66,59 @@ public final class Recording implements AutoCloseable
      * @param layers The headset layers drawn into the recording.
      * @param placement The room's placement in the world.
      * @param times The frame times the recording's own time is added to.
+     * @param window The stream window, sent pictures while it is open.
      */
-    public Recording(VitaVRConfig config, Layers layers, Placement placement, FrameTimes times)
+    public Recording(VitaVRConfig config, Layers layers, Placement placement, FrameTimes times, StreamWindow window)
     {
         this.config = config;
         this.layers = layers;
         this.placement = placement;
         this.times = times;
+        this.window = window;
     }
 
     /**
-     * Starts the video once, if enabled and the interface size is known, in the current OpenGL context.
+     * Starts the video once if enabled, follows the stream window opening and closing, and keeps the composite while either needs it.
+     * Waits for the interface size to be known. Runs in the current OpenGL context.
      */
     public void start()
     {
-        if (tried || !config.recordSession() || layers.getPicture().getWidth() == 0)
+        if (layers.getPicture().getWidth() == 0)
+        {
+            return;
+        }
+        startVideo();
+        boolean streaming = window.isOpen();
+        if (streaming && stream == null)
+        {
+            stream = new StreamOutput(window);
+        }
+        else if (!streaming && stream != null)
+        {
+            stream.close();
+            stream = null;
+            streamDue = false;
+        }
+        boolean needed = recorder != null || stream != null;
+        if (needed && composite == null)
+        {
+            composite = Composite.create(config, layers);
+        }
+        else if (!needed && composite != null)
+        {
+            composite.close();
+            composite = null;
+            due = false;
+            spectating = false;
+        }
+    }
+
+    /**
+     * Starts the video once, if enabled.
+     */
+    private void startVideo()
+    {
+        if (tried || !config.recordSession())
         {
             return;
         }
@@ -86,7 +129,6 @@ public final class Recording implements AutoCloseable
             Files.createDirectories(directory);
             Path file = directory.resolve("vr-" + LocalDateTime.now().format(STAMP) + ".mp4");
             recorder = SessionRecorder.start(file);
-            composite = Composite.create(config, layers);
             Logger.info("[VitaVR] Recording the session to " + file);
         }
         catch (IOException e)
@@ -133,8 +175,9 @@ public final class Recording implements AutoCloseable
         long now = System.nanoTime();
         double seconds = lastPacedNanos == 0 ? 0 : (now - lastPacedNanos) / 1e9;
         lastPacedNanos = now;
-        recordTimes = recorder != null ? recordPacer.due(now) : 0;
-        due = recordTimes > 0;
+        recordTimes = recorder != null && composite != null ? recordPacer.due(now) : 0;
+        streamDue = stream != null && composite != null && stream.due(now);
+        due = recordTimes > 0 || streamDue;
         spectating = false;
         if (composite == null || head == null || !composite.isSteadied())
         {
@@ -187,7 +230,7 @@ public final class Recording implements AutoCloseable
      */
     public void record(EyesTarget eyes, float[][] eyeMatrices)
     {
-        if (!due)
+        if (!due || composite == null)
         {
             return;
         }
@@ -197,6 +240,10 @@ public final class Recording implements AutoCloseable
         if (recordTimes > 0)
         {
             recorder.capture(picture, recordTimes);
+        }
+        if (streamDue)
+        {
+            stream.capture(picture);
         }
         times.add(FrameTimes.Part.RECORDING, System.nanoTime() - from);
     }
@@ -294,7 +341,7 @@ public final class Recording implements AutoCloseable
     }
 
     /**
-     * Ends the video, if any, in its OpenGL context. Safe to call more than once.
+     * Ends the video, if any, and stops sending to the stream window, in the OpenGL context. Safe to call more than once.
      */
     @Override
     public void close()
@@ -323,11 +370,17 @@ public final class Recording implements AutoCloseable
                 recorder = null;
             }
         }
+        if (stream != null)
+        {
+            stream.close();
+            stream = null;
+        }
         if (composite != null)
         {
             composite.close();
             composite = null;
         }
+        streamDue = false;
         due = false;
         spectating = false;
     }

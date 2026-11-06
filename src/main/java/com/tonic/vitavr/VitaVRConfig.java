@@ -63,6 +63,7 @@ public interface VitaVRConfig extends Config
     String RECORD_MODE = "recordMode";
     String ONE_EYE_CAMERA = "oneEyeCamera";
     String RECORD_HIDE_CHAT = "recordHideChat";
+    String STREAM_WINDOW = "streamWindow";
     String SETTINGS_TAB = "settingsTab";
     String HUD_LAYOUT = "hudLayout";
 
@@ -78,7 +79,7 @@ public interface VitaVRConfig extends Config
     @ConfigSection(name = "Comfort", description = "Comfort and vibration", position = 3)
     String COMFORT = "comfort";
 
-    @ConfigSection(name = "Recording", description = "Recording a session to video", position = 4)
+    @ConfigSection(name = "Recording and streaming", description = "Recording a session to video, and the stream window", position = 4)
     String RECORDING = "recording";
 
     @ConfigItem(keyName = VIEW_MODE, name = "View", description = "First person, or the world as a table in front of you", position = 0, section = VIEW)
@@ -342,20 +343,26 @@ public interface VitaVRConfig extends Config
         return false;
     }
 
-    @ConfigItem(keyName = RECORD_MODE, name = "Record", description = "One eye's view, or both side by side", position = 1, section = RECORDING)
+    @ConfigItem(keyName = RECORD_MODE, name = "Show", description = "One eye's view, or both side by side, in recordings and the stream", position = 1, section = RECORDING)
     default RecordMode recordMode()
     {
         return RecordMode.ONE_EYE;
     }
 
-    @ConfigItem(keyName = ONE_EYE_CAMERA, name = "One eye camera", description = "A camera steadied on your head, or the left eye exactly", position = 2, section = RECORDING)
+    @ConfigItem(keyName = ONE_EYE_CAMERA, name = "One eye camera", description = "A camera steadied on your head, or the left eye exactly, in recordings and the stream", position = 2, section = RECORDING)
     default OneEyeCamera oneEyeCamera()
     {
         return OneEyeCamera.STEADIED;
     }
 
-    @ConfigItem(keyName = RECORD_HIDE_CHAT, name = "Hide chat", description = "Leave the chat column out of the video", position = 3, section = RECORDING)
+    @ConfigItem(keyName = RECORD_HIDE_CHAT, name = "Hide chat", description = "Leave the chatbox out of recordings and the stream", position = 3, section = RECORDING)
     default boolean recordHideChat()
+    {
+        return false;
+    }
+
+    @ConfigItem(keyName = STREAM_WINDOW, name = "Stream window", description = "A window showing the VR view with the interfaces, for capturing in streaming software", position = 4, section = RECORDING)
+    default boolean streamWindow()
     {
         return false;
     }

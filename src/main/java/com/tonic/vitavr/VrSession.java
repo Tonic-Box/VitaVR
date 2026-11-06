@@ -6,6 +6,7 @@ import com.tonic.vitavr.render.VrCallbacks;
 import com.tonic.vitavr.render.scene.SceneRenderer;
 import com.tonic.vitavr.render.scene.gpu.GpuScene;
 import com.tonic.vitavr.render.scene.hd.HdScene;
+import com.tonic.vitavr.ui.StreamWindow;
 import com.tonic.vitavr.ui.filechooser.ExtensionFileFilter;
 import com.tonic.vitavr.ui.filechooser.FileChooserDialog;
 import com.tonic.vitavr.ui.filechooser.FileChooserResult;
@@ -78,6 +79,10 @@ public class VrSession
     /** Called on the Swing thread with the reason when VR ends by itself or recording fails. */
     @Setter
     private Consumer<String> onEnded = reason -> {};
+    /** Called on the Swing thread when the user closes the stream window. */
+    @Setter
+    private Runnable onStreamClosed = () -> {};
+    private final StreamWindow streamWindow = new StreamWindow(this::streamClosedByUser);
 
     @Getter
     private boolean running;
@@ -126,6 +131,10 @@ public class VrSession
 
         // Queued after the renderer sets its draw callbacks
         clientThread.invoke(this::install);
+        if (config.streamWindow())
+        {
+            streamWindow.open();
+        }
         Logger.info(hdScene != null ? "[VitaVR] Entering VR through 117 HD" : "[VitaVR] Entering VR through the GPU plugin");
     }
 
@@ -140,6 +149,7 @@ public class VrSession
             return;
         }
         running = false;
+        streamWindow.close();
         clientThread.invoke(() ->
         {
             VrCallbacks closed = callbacks;
@@ -198,7 +208,7 @@ public class VrSession
                 return;
             }
         }
-        callbacks = new VrCallbacks(renderer, client, config, configManager, this::ended);
+        callbacks = new VrCallbacks(renderer, client, config, configManager, streamWindow, this::ended);
         client.setDrawCallbacks(callbacks);
         callbacks.applyFlags();
         WorldOverlays.setHidden(true);
@@ -244,11 +254,39 @@ public class VrSession
      */
     public void settingsChanged(String key)
     {
+        if (VitaVRConfig.STREAM_WINDOW.equals(key))
+        {
+            SwingUtilities.invokeLater(this::followStreamSetting);
+        }
         VrCallbacks shown = callbacks;
         if (shown != null)
         {
             shown.settingsChanged(key);
         }
+    }
+
+    /**
+     * Opens or closes the stream window to match its setting while in VR. Runs on the Swing thread.
+     */
+    private void followStreamSetting()
+    {
+        if (running && config.streamWindow())
+        {
+            streamWindow.open();
+        }
+        else if (!config.streamWindow())
+        {
+            streamWindow.close();
+        }
+    }
+
+    /**
+     * Unticks the stream window setting after the user closed the window. Runs on the Swing thread.
+     */
+    private void streamClosedByUser()
+    {
+        configManager.setConfiguration(VitaVRConfig.GROUP, VitaVRConfig.STREAM_WINDOW, false);
+        onStreamClosed.run();
     }
 
     /**

@@ -44,6 +44,9 @@ Moved interfaces stay where you put them. **Moved interfaces** in the headset's 
 Tick **Record the session** on the side panel before launching, and **Hide chat in the recording** to leave the chatbox out of the video. You'll be asked where to save the video when you return to the desktop.
 Recording needs [ffmpeg](https://ffmpeg.org/download.html) installed and on your PATH.
 
+## Streaming
+Tick **Stream window** on the side panel to open a **VitaVR stream** window showing what you see in VR, interfaces included, at 30 fps. Capture it with your streaming software's window capture. It uses the recording view settings, can be opened and closed at any time, and closes when you leave VR.
+
 ## Building from source
 **Requirements:** JDK 11
 ```

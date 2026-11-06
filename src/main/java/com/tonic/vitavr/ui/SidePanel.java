@@ -28,6 +28,7 @@ public class SidePanel extends PluginPanel
     private final JButton launchButton;
     private final JCheckBox recordBox;
     private final JCheckBox hideChatBox;
+    private final JCheckBox streamBox;
     private final JLabel statusLabel;
 
     @Inject
@@ -65,8 +66,17 @@ public class SidePanel extends PluginPanel
         add(recordBox, c);
         c.gridy++;
 
-        hideChatBox = new JCheckBox("Hide chat in the recording");
-        hideChatBox.setToolTipText("Leaves the chatbox out of the video; it still shows in the headset");
+        streamBox = new JCheckBox("Stream window");
+        streamBox.setToolTipText("Opens a window showing the VR view with the interfaces, for window capture in streaming software; it uses the recording's view settings");
+        streamBox.setBackground(ColorScheme.DARK_GRAY_COLOR);
+        streamBox.setFocusable(false);
+        streamBox.setSelected(config.streamWindow());
+        streamBox.addActionListener(e -> configManager.setConfiguration(VitaVRConfig.GROUP, VitaVRConfig.STREAM_WINDOW, streamBox.isSelected()));
+        add(streamBox, c);
+        c.gridy++;
+
+        hideChatBox = new JCheckBox("Hide chat in recordings and the stream");
+        hideChatBox.setToolTipText("Leaves the chatbox out of the video and the stream window; it still shows in the headset");
         hideChatBox.setBackground(ColorScheme.DARK_GRAY_COLOR);
         hideChatBox.setFocusable(false);
         hideChatBox.setSelected(config.recordHideChat());
@@ -85,6 +95,7 @@ public class SidePanel extends PluginPanel
 
         // The headset can end VR by itself
         session.setOnEnded(this::refresh);
+        session.setOnStreamClosed(() -> streamBox.setSelected(false));
     }
 
     private void toggle()

@@ -199,7 +199,8 @@ public final class Layers implements AutoCloseable
             layoutStale = true;
         }
         // VitaVR's own saved state changes nothing about the interfaces' shape
-        else if (!VitaVRConfig.SETTINGS_TAB.equals(key) && !VitaVRConfig.TABLE_TILT.equals(key) && !VitaVRConfig.RECORD_HIDE_CHAT.equals(key))
+        else if (!VitaVRConfig.SETTINGS_TAB.equals(key) && !VitaVRConfig.TABLE_TILT.equals(key) && !VitaVRConfig.RECORD_HIDE_CHAT.equals(key)
+                && !VitaVRConfig.STREAM_WINDOW.equals(key))
         {
             hudShapeStale = true;
         }

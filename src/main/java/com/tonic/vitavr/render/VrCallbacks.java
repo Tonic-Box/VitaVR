@@ -22,6 +22,7 @@ import com.tonic.vitavr.render.draw.Beams;
 import com.tonic.vitavr.render.draw.Markers;
 import com.tonic.vitavr.render.draw.PictureQuad;
 import com.tonic.vitavr.render.recording.Recording;
+import com.tonic.vitavr.ui.StreamWindow;
 import com.tonic.vitavr.render.scene.SceneRenderer;
 import com.tonic.vitavr.render.scene.SceneViews;
 import com.tonic.vitavr.space.Pose;
@@ -107,6 +108,7 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
     private final ConfigManager configManager;
     private final CanvasKeys keys;
     private final Consumer<String> onEnded;
+    private final StreamWindow streamWindow;
 
     private final Placement placement = new Placement();
     private final OwnBody ownBody = new OwnBody();
@@ -170,10 +172,12 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
      * @param client The client.
      * @param config The plugin config.
      * @param configManager The config manager the settings panel writes to.
+     * @param streamWindow The stream window, sent the composite picture while open.
      * @param onEnded Receives the reason, on the client thread, when the session ends or fails.
      */
-    public VrCallbacks(SceneRenderer renderer, Client client, VitaVRConfig config, ConfigManager configManager, Consumer<String> onEnded)
+    public VrCallbacks(SceneRenderer renderer, Client client, VitaVRConfig config, ConfigManager configManager, StreamWindow streamWindow, Consumer<String> onEnded)
     {
+        this.streamWindow = streamWindow;
         this.configManager = configManager;
         this.keys = new CanvasKeys(client);
         this.renderer = renderer;
@@ -889,7 +893,7 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
             beams = new Beams();
             markers = new Markers();
             layers = new Layers(client, config, configManager, keys, headset, pointer);
-            recording = new Recording(config, layers, placement, times);
+            recording = new Recording(config, layers, placement, times, streamWindow);
             views = new SceneViews(eyes, eyeMatrices, placement, recording);
             roofs = new Roofs(client, config, renderer);
             atlas = new AtlasQuad(ActorOverlays.ATLAS_WIDTH, ActorOverlays.ATLAS_HEIGHT);
