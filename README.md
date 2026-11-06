@@ -1,7 +1,6 @@
 # VitaVR
 VitaVR is a VitaLite plugin that lets you play in a VR headset, and switch back to the desktop at any time without logging out.
-- Play in first person at life size, or as a tabletop view in front of you
-- Laser pointers on both controllers for clicking the world and the interfaces
+- Play in first person, or as a tabletop view
 - Your interfaces float around you, with health bars, hitsplats and overheads shown in 3D
 - A wrist display with your orbs, compass and the time
 - Comfort options, haptics, and session recording
@@ -10,7 +9,7 @@ VitaVR is a VitaLite plugin that lets you play in a VR headset, and switch back 
 - Windows
 - [VitaLite](https://github.com/Tonic-Box/VitaLauncher/releases)
 - A VR headset with an OpenXR runtime: SteamVR, Meta Quest Link or Virtual Desktop
-- The GPU plugin (VitaVR turns it on for you while in VR); 117 HD support is in progress
+- GPU plugin or 117HD must be on (supports both)
 
 ## Installing
 Put `VitaVR-1.0-SNAPSHOT.jar` in your `~\.runelite\sideloaded-plugins` folder and start VitaLite.
@@ -28,8 +27,8 @@ Settings are under **VitaVR** in the config panel, and in the headset's own sett
 | Trigger | Click what the pointer is on |
 | Right grip | Right-click (opens the menu) |
 | Left grip (hold) | Ctrl |
-| Left grip + trigger on the chatbox, minimap or inventory | Move it; while held, right stick left/right moves it further or nearer, up/down resizes it, left stick turns and tilts it |
-| Right stick | Turn; scroll when pointing at the interfaces |
+| Right stick left/right | Turn |
+| Right stick up/down | Scroll when pointing at the interfaces; tilt the table in tabletop |
 | A (right) | Switch between first person and tabletop |
 | B (right) | Show or hide the interfaces |
 | X (left) | VR settings |
@@ -38,10 +37,21 @@ Settings are under **VitaVR** in the config panel, and in the headset's own sett
 
 Turn your left wrist toward you to see the wrist display.
 
-Moved interfaces stay where you put them. **Moved interfaces** in the headset's settings (Interfaces tab) puts them back.
+### Moving the interfaces
+Hold the left grip and point at the chatbox, minimap or inventory; it is outlined. Press the trigger to grab it and release to let go.
+
+| While holding one | What it does |
+|-------------------|--------------|
+| Pointer | Moves it around you |
+| Right stick left/right | Pushes it further away or pulls it nearer |
+| Right stick up/down | Makes it bigger or smaller |
+| Left stick left/right | Angles it left or right |
+| Left stick up/down | Tilts it up or down |
+
+Moved interfaces stay where you put them, between sessions too, and fold back into place while a large interface like the bank is open. **Moved interfaces** in the headset's settings (Interfaces tab) puts them all back.
 
 ## Recording
-Tick **Record the session** on the side panel before launching, and **Hide chat in the recording** to leave the chatbox out of the video. You'll be asked where to save the video when you return to the desktop.
+Tick **Record the session** on the side panel before launching, and **Hide chat in recordings and the stream** to leave the chatbox out of the video. You'll be asked where to save the video when you return to the desktop.
 Recording needs [ffmpeg](https://ffmpeg.org/download.html) installed and on your PATH.
 
 ## Streaming
