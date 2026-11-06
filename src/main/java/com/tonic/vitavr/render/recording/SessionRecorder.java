@@ -1,10 +1,6 @@
 package com.tonic.vitavr.render.recording;
 
 import org.lwjgl.opengl.GL11;
-import org.lwjgl.opengl.GL15;
-import org.lwjgl.opengl.GL21;
-import org.lwjgl.opengl.GL30;
-import org.lwjgl.opengl.GL32;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -18,8 +14,8 @@ import java.util.concurrent.BlockingQueue;
  */
 public final class SessionRecorder implements AutoCloseable
 {
-    public static final int WIDTH = 1920;
-    public static final int HEIGHT = 1080;
+    public static final int WIDTH = Composite.WIDTH;
+    public static final int HEIGHT = Composite.HEIGHT;
     public static final int FRAMES_PER_SECOND = 60;
 
     private static final int QUEUED = 6;
@@ -42,11 +38,8 @@ public final class SessionRecorder implements AutoCloseable
     private final FfmpegEncoder encoder;
     private final BlockingQueue<Frame> queue = new ArrayBlockingQueue<>(QUEUED);
     private final BlockingQueue<byte[]> free = new ArrayBlockingQueue<>(QUEUED + 1);
-    private final int[] readBuffers = new int[2];
-    private final long[] fences = new long[2];
-    private final int[] repeats = new int[2];
+    private final FrameReadback readback;
     private final Thread writer;
-    private int slot;
     private volatile IOException failure;
     private long dropped;
     private boolean finished;
@@ -60,13 +53,7 @@ public final class SessionRecorder implements AutoCloseable
         {
             free.add(new byte[ROW * HEIGHT]);
         }
-        for (int i = 0; i < 2; i++)
-        {
-            readBuffers[i] = GL15.glGenBuffers();
-            GL15.glBindBuffer(GL21.GL_PIXEL_PACK_BUFFER, readBuffers[i]);
-            GL15.glBufferData(GL21.GL_PIXEL_PACK_BUFFER, (long) ROW * HEIGHT, GL15.GL_STREAM_READ);
-        }
-        GL15.glBindBuffer(GL21.GL_PIXEL_PACK_BUFFER, 0);
+        readback = new FrameReadback(WIDTH, HEIGHT, GL11.GL_RGBA, GL11.GL_UNSIGNED_BYTE, this::queue);
         writer = new Thread(this::write, "vitavr-recording");
         writer.setDaemon(true);
         writer.start();
@@ -90,49 +77,26 @@ public final class SessionRecorder implements AutoCloseable
      */
     public void capture(int framebuffer, int times)
     {
-        collect(slot ^ 1);
-        GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, framebuffer);
-        GL11.glReadBuffer(GL30.GL_COLOR_ATTACHMENT0);
-        GL15.glBindBuffer(GL21.GL_PIXEL_PACK_BUFFER, readBuffers[slot]);
-        GL11.glReadPixels(0, 0, WIDTH, HEIGHT, GL11.GL_RGBA, GL11.GL_UNSIGNED_BYTE, 0L);
-        GL15.glBindBuffer(GL21.GL_PIXEL_PACK_BUFFER, 0);
-        GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, 0);
-        fences[slot] = GL32.glFenceSync(GL32.GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
-        repeats[slot] = times;
-        slot ^= 1;
+        readback.capture(framebuffer, times);
     }
 
     /**
      * Flips a read-back frame upright and queues it, or drops it if no buffer is free.
      */
-    private void collect(int from)
+    private void queue(ByteBuffer mapped, int repeats)
     {
-        if (fences[from] == 0)
-        {
-            return;
-        }
-        GL32.glClientWaitSync(fences[from], GL32.GL_SYNC_FLUSH_COMMANDS_BIT, GL32.GL_TIMEOUT_IGNORED);
-        GL32.glDeleteSync(fences[from]);
-        fences[from] = 0;
         byte[] pixels = free.poll();
         if (pixels == null)
         {
             dropped++;
             return;
         }
-        GL15.glBindBuffer(GL21.GL_PIXEL_PACK_BUFFER, readBuffers[from]);
-        ByteBuffer mapped = GL15.glMapBuffer(GL21.GL_PIXEL_PACK_BUFFER, GL15.GL_READ_ONLY);
-        if (mapped != null)
+        for (int row = 0; row < HEIGHT; row++)
         {
-            for (int row = 0; row < HEIGHT; row++)
-            {
-                mapped.position((HEIGHT - 1 - row) * ROW);
-                mapped.get(pixels, row * ROW, ROW);
-            }
-            GL15.glUnmapBuffer(GL21.GL_PIXEL_PACK_BUFFER);
+            mapped.position((HEIGHT - 1 - row) * ROW);
+            mapped.get(pixels, row * ROW, ROW);
         }
-        GL15.glBindBuffer(GL21.GL_PIXEL_PACK_BUFFER, 0);
-        if (!queue.offer(new Frame(pixels, repeats[from])))
+        if (!queue.offer(new Frame(pixels, repeats)))
         {
             free.add(pixels);
             dropped++;
@@ -186,8 +150,7 @@ public final class SessionRecorder implements AutoCloseable
      */
     public Path finish() throws IOException, InterruptedException
     {
-        collect(slot ^ 1);
-        collect(slot);
+        readback.flush();
         queue.put(END);
         writer.join();
         if (failure != null)
@@ -215,13 +178,6 @@ public final class SessionRecorder implements AutoCloseable
             writer.interrupt();
         }
         encoder.close();
-        for (int i = 0; i < 2; i++)
-        {
-            if (fences[i] != 0)
-            {
-                GL32.glDeleteSync(fences[i]);
-            }
-            GL15.glDeleteBuffers(readBuffers[i]);
-        }
+        readback.close();
     }
 }
