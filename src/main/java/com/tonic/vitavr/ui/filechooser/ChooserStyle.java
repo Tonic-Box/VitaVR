@@ -11,7 +11,7 @@ import java.awt.GraphicsEnvironment;
 import java.awt.Toolkit;
 
 /**
- * The file chooser's palette, fonts, sizes and small widget factories, in the OSH client's dark side theme colours.
+ * The file chooser's palette, fonts, sizes and small widget factories.
  * The client may run with Windows display scaling turned off and its own game font as the default, so the chooser
  * scales its own sizes to the screen and uses the system UI font.
  */

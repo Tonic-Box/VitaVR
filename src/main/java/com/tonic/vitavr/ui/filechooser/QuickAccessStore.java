@@ -41,7 +41,7 @@ public final class QuickAccessStore
     }
 
     /**
-     * The store every chooser in every OSH window shares, backed by the user's preferences under the node the designer
+     * The store every chooser window shares, backed by the user's preferences under the node the designer
      * first kept it in, so the places pinned there carry over.
      */
     public static synchronized QuickAccessStore shared()
