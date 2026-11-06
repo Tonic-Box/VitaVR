@@ -27,6 +27,7 @@ public class SidePanel extends PluginPanel
     private final Client client;
     private final JButton launchButton;
     private final JCheckBox recordBox;
+    private final JCheckBox hideChatBox;
     private final JLabel statusLabel;
 
     @Inject
@@ -62,6 +63,15 @@ public class SidePanel extends PluginPanel
         recordBox.setSelected(config.recordSession());
         recordBox.addActionListener(e -> configManager.setConfiguration(VitaVRConfig.GROUP, VitaVRConfig.RECORD_SESSION, recordBox.isSelected()));
         add(recordBox, c);
+        c.gridy++;
+
+        hideChatBox = new JCheckBox("Hide chat in the recording");
+        hideChatBox.setToolTipText("Leaves the chatbox out of the video; it still shows in the headset");
+        hideChatBox.setBackground(ColorScheme.DARK_GRAY_COLOR);
+        hideChatBox.setFocusable(false);
+        hideChatBox.setSelected(config.recordHideChat());
+        hideChatBox.addActionListener(e -> configManager.setConfiguration(VitaVRConfig.GROUP, VitaVRConfig.RECORD_HIDE_CHAT, hideChatBox.isSelected()));
+        add(hideChatBox, c);
         c.gridy++;
 
         statusLabel = new JLabel(" ", SwingConstants.CENTER);
