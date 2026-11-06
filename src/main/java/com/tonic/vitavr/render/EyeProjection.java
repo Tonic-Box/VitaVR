@@ -1,5 +1,6 @@
 package com.tonic.vitavr.render;
 
+import com.tonic.vitavr.space.Vectors;
 import net.runelite.api.Projection;
 
 /**
@@ -29,6 +30,32 @@ final class EyeProjection implements Projection
         this.right = right;
         this.down = down;
         this.forward = forward;
+    }
+
+    /**
+     * Gets this projection turned to face a point, from the same eye, so a model there lies wholly ahead of it.
+     * Points behind a projection turn its winding over, which culled the wrong faces of actors below a raised head.
+     *
+     * @param x The point, across.
+     * @param y The point, down.
+     * @param z The point, along.
+     * @return The turned projection, or this one for a point at the eye.
+     */
+    EyeProjection facing(double x, double y, double z)
+    {
+        double[] towards = {x - eyeX, y - eyeY, z - eyeZ};
+        double away = Vectors.length(towards);
+        if (away < 1)
+        {
+            return this;
+        }
+        double[] ahead = Vectors.scale(towards, 1 / away);
+        double[] reference = Math.abs(Vectors.dot(ahead, down)) > 0.99 ? forward : down;
+        // Keep the head's handedness so faces wind the same way
+        double handed = Math.signum(Vectors.dot(Vectors.cross(down, forward), right));
+        double[] across = Vectors.scale(Vectors.unit(Vectors.cross(reference, ahead)), handed);
+        double[] below = Vectors.scale(Vectors.cross(ahead, across), handed);
+        return new EyeProjection(new double[]{eyeX, eyeY, eyeZ}, across, below, ahead);
     }
 
     @Override

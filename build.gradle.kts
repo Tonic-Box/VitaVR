@@ -46,6 +46,7 @@ dependencies {
     shade("org.lwjgl:lwjgl-openxr:$lwjglVersion")
     shade("org.lwjgl:lwjgl-openxr:$lwjglVersion:natives-windows")
 
+    testImplementation("net.runelite:client:$runeliteVersion")
     testImplementation("org.junit.jupiter:junit-jupiter:5.10.2")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }

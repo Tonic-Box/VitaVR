@@ -1166,14 +1166,14 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
     @Override
     public void drawDynamic(Projection projection, Scene scene, TileObject tileObject, Renderable renderable, Model model, int orientation, int x, int y, int z)
     {
-        plugin.drawDynamic(seenFrom(projection, scene), scene, tileObject, renderable, model, orientation, x, y, z);
+        plugin.drawDynamic(seenFrom(projection, scene, x, y, z), scene, tileObject, renderable, model, orientation, x, y, z);
     }
 
     @Override
     public void drawDynamic(int renderThreadId, Projection projection, Scene scene, TileObject tileObject, Renderable renderable, Model model, int orientation,
                             int x, int y, int z)
     {
-        plugin.drawDynamic(renderThreadId, seenFrom(projection, scene), scene, tileObject, renderable, model, orientation, x, y, z);
+        plugin.drawDynamic(renderThreadId, seenFrom(projection, scene, x, y, z), scene, tileObject, renderable, model, orientation, x, y, z);
     }
 
     @Override
@@ -1182,7 +1182,7 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
         Player player = client.getLocalPlayer();
         if (!firstPersonEyes() || scene.getWorldViewId() != WorldView.TOPLEVEL || player == null || gameObject.getRenderable() != player)
         {
-            plugin.drawTemp(seenFrom(projection, scene), scene, gameObject, model, orientation, x, y, z);
+            plugin.drawTemp(seenFrom(projection, scene, x, y, z), scene, gameObject, model, orientation, x, y, z);
             return;
         }
 
@@ -1193,7 +1193,7 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
         ownBody.shape(player, model, facing, bodyX, y, bodyZ);
         try
         {
-            plugin.drawTemp(seenFrom(projection, scene), scene, gameObject, model, facing, bodyX, y, bodyZ);
+            plugin.drawTemp(seenFrom(projection, scene, bodyX, y, bodyZ), scene, gameObject, model, facing, bodyX, y, bodyZ);
         }
         finally
         {
@@ -1202,11 +1202,11 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
     }
 
     /**
-     * Gets the projection a top level model is culled and sorted with, the head's while the eyes are drawn.
+     * Gets the projection a top level model is culled and sorted with: while the eyes are drawn, the head's, turned to face the model.
      */
-    private Projection seenFrom(Projection projection, Scene scene)
+    private Projection seenFrom(Projection projection, Scene scene, int x, int y, int z)
     {
-        return drawingEyes && scene.getWorldViewId() == WorldView.TOPLEVEL ? headProjection : projection;
+        return drawingEyes && scene.getWorldViewId() == WorldView.TOPLEVEL ? headProjection.facing(x, y, z) : projection;
     }
 
     /**
