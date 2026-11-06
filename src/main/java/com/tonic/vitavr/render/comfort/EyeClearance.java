@@ -1,5 +1,6 @@
 package com.tonic.vitavr.render.comfort;
 
+import net.runelite.api.Actor;
 import net.runelite.api.Client;
 import net.runelite.api.DecorativeObject;
 import net.runelite.api.GameObject;
@@ -116,7 +117,8 @@ public final class EyeClearance
     {
         for (GameObject object : tile.getGameObjects())
         {
-            if (object != null && seen.add(object))
+            // Actors stand on tiles as game objects while the scene draws; only scenery walls the eyes in
+            if (object != null && !(object.getRenderable() instanceof Actor) && seen.add(object))
             {
                 keep(object.getRenderable(), object.getX(), object.getZ(), object.getY(), object.getModelOrientation());
             }
