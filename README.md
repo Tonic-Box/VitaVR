@@ -28,6 +28,7 @@ Settings are under **VitaVR** in the config panel, and in the headset's own sett
 | Trigger | Click what the pointer is on |
 | Right grip | Right-click (opens the menu) |
 | Left grip (hold) | Ctrl |
+| Left grip + trigger on the chatbox, minimap or inventory | Move it; while held, right stick left/right moves it further or nearer, up/down resizes it, left stick turns and tilts it |
 | Right stick | Turn; scroll when pointing at the interfaces |
 | A (right) | Switch between first person and tabletop |
 | B (right) | Show or hide the interfaces |
@@ -37,8 +38,10 @@ Settings are under **VitaVR** in the config panel, and in the headset's own sett
 
 Turn your left wrist toward you to see the wrist display.
 
+Moved interfaces stay where you put them. **Moved interfaces** in the headset's settings (Interfaces tab) puts them back.
+
 ## Recording
-Tick **Record the session** on the side panel before launching. You'll be asked where to save the video when you return to the desktop.
+Tick **Record the session** on the side panel before launching, and **Hide chat in the recording** to leave the chatbox out of the video. You'll be asked where to save the video when you return to the desktop.
 Recording needs [ffmpeg](https://ffmpeg.org/download.html) installed and on your PATH.
 
 ## Building from source

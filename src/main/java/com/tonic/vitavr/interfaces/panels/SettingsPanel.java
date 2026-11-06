@@ -3,6 +3,7 @@ package com.tonic.vitavr.interfaces.panels;
 import com.tonic.vitavr.VitaVRConfig;
 import com.tonic.vitavr.config.TurnMode;
 import com.tonic.vitavr.config.ViewMode;
+import com.tonic.vitavr.interfaces.hud.HudLayout;
 import net.runelite.client.config.ConfigManager;
 
 import java.awt.Color;
@@ -67,7 +68,7 @@ public final class SettingsPanel extends AbstractPanel
         }
     }
 
-    /** A setting row with its tab, name, shown value and a step of -1 or 1. */
+    /** A setting row with its tab, name, shown value and a step of -1 or 1; a button row shows one button labelled with the value instead. */
     private static final class Row
     {
         final Tab tab;
@@ -75,14 +76,21 @@ public final class SettingsPanel extends AbstractPanel
         final Supplier<String> value;
         final IntConsumer step;
         final boolean nextLaunch;
+        final boolean button;
 
         Row(Tab tab, String name, Supplier<String> value, IntConsumer step, boolean nextLaunch)
+        {
+            this(tab, name, value, step, nextLaunch, false);
+        }
+
+        Row(Tab tab, String name, Supplier<String> value, IntConsumer step, boolean nextLaunch, boolean button)
         {
             this.tab = tab;
             this.name = name;
             this.value = value;
             this.step = step;
             this.nextLaunch = nextLaunch;
+            this.button = button;
         }
     }
 
@@ -145,6 +153,7 @@ public final class SettingsPanel extends AbstractPanel
                         direction -> set(VitaVRConfig.INVENTORY_SIDE, (int) stepped(config.inventorySidePercent(), 10, direction, 50, 250)), false),
                 new Row(Tab.INTERFACES, "Sides apart", () -> config.sidesApartDegrees() + "°",
                         direction -> set(VitaVRConfig.SIDES_APART, (int) stepped(config.sidesApartDegrees(), 2, direction, 0, 40)), false),
+                new Row(Tab.INTERFACES, "Moved interfaces", this::movedInterfaces, direction -> set(VitaVRConfig.HUD_LAYOUT, ""), false, true),
                 new Row(Tab.INTERFACES, "Hovered tile", () -> onOff(config.outlineHoveredTile()), direction -> set(VitaVRConfig.OUTLINE_HOVERED, !config.outlineHoveredTile()), false),
                 new Row(Tab.INTERFACES, "Your tile", () -> onOff(config.outlineLocalTile()), direction -> set(VitaVRConfig.OUTLINE_LOCAL, !config.outlineLocalTile()), false),
                 new Row(Tab.INTERFACES, "Destination tile", () -> onOff(config.outlineDestinationTile()),
@@ -161,6 +170,16 @@ public final class SettingsPanel extends AbstractPanel
                 new Row(Tab.COMFORT, "Low HP heartbeat", () -> onOff(config.heartbeat()), direction -> set(VitaVRConfig.HEARTBEAT, !config.heartbeat()), false),
                 new Row(Tab.COMFORT, "Heartbeat below", () -> config.heartbeatBelowPercent() + "% HP",
                         direction -> set(VitaVRConfig.HEARTBEAT_BELOW, (int) stepped(config.heartbeatBelowPercent(), 5, direction, 5, 75)), false));
+    }
+
+    /**
+     * Gets the moved interfaces row's button label: how many pieces are moved, or that none are.
+     */
+    private String movedInterfaces()
+    {
+        HudLayout layout = new HudLayout();
+        layout.load(config.hudLayout());
+        return layout.movedCount() == 0 ? "Default" : "Reset " + layout.movedCount();
     }
 
     private void set(String key, Object value)
@@ -267,7 +286,14 @@ public final class SettingsPanel extends AbstractPanel
     protected Rectangle bounds(int target)
     {
         boolean row = target != doneTarget() && target >= tabs();
-        return row && rows.get((target - tabs()) / 2).tab != tab ? null : rectangle(target);
+        if (!row)
+        {
+            return rectangle(target);
+        }
+        Row shown = rows.get((target - tabs()) / 2);
+        // A button row's one button is its first target
+        boolean spare = shown.button && (target - tabs()) % 2 == 1;
+        return shown.tab != tab || spare ? null : rectangle(target);
     }
 
     private Rectangle rectangle(int target)
@@ -284,6 +310,10 @@ public final class SettingsPanel extends AbstractPanel
         int index = (target - tabs()) / 2;
         int top = ROWS_TOP + placeInTab(index) * ROW + (ROW - ARROW) / 2;
         int right = WIDTH - PAD;
+        if (rows.get(index).button)
+        {
+            return new Rectangle(right - ARROW - VALUE - ARROW, top, ARROW + VALUE + ARROW, ARROW);
+        }
         int x = (target - tabs()) % 2 == 0 ? right - ARROW - VALUE - ARROW : right - ARROW;
         return new Rectangle(x, top, ARROW, ARROW);
     }
@@ -357,6 +387,14 @@ public final class SettingsPanel extends AbstractPanel
         g.setColor(TEXT);
         g.drawString(row.name + (row.nextLaunch ? " *" : ""), PAD, middle + metrics.getAscent() / 2 - 2);
         int down = tabs() + index * 2;
+        if (row.button)
+        {
+            Rectangle only = rectangle(down);
+            button(g, only, hovered() == down);
+            g.setColor(TEXT);
+            centred(g, row.value.get(), only.x, only.width, middle);
+            return;
+        }
         Rectangle lower = rectangle(down);
         Rectangle upper = rectangle(down + 1);
         button(g, lower, hovered() == down);

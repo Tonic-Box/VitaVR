@@ -64,7 +64,7 @@ public class VitaVRPlugin extends Plugin
         }
         else if (VitaVRConfig.GROUP.equals(event.getGroup()))
         {
-            session.settingsChanged();
+            session.settingsChanged(event.getKey());
         }
     }
 

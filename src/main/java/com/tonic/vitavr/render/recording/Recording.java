@@ -7,6 +7,7 @@ import com.tonic.vitavr.config.RecordMode;
 import com.tonic.vitavr.headset.layers.HudPanel;
 import com.tonic.vitavr.headset.layers.RoomPanel;
 import com.tonic.vitavr.interfaces.hud.HudPicture;
+import com.tonic.vitavr.interfaces.hud.HudPiece;
 import com.tonic.vitavr.interfaces.hud.Layers;
 import com.tonic.vitavr.interfaces.pointer.WorldMenu;
 import com.tonic.vitavr.render.EyesTarget;
@@ -27,6 +28,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.Arrays;
+import java.util.List;
 
 /**
  * Records the session to a 1920 by 1080 video from both eyes, the cropped left eye, or a steadied head camera, with the headset layers drawn in.
@@ -158,6 +161,14 @@ public final class Recording implements AutoCloseable
     }
 
     /**
+     * @return The steadied camera's picture, for renderers that draw into it directly.
+     */
+    public EyesTarget getSpectatorTarget()
+    {
+        return video.spectatorTarget;
+    }
+
+    /**
      * Binds the steadied camera's picture for drawing.
      */
     public void useSpectator()
@@ -197,11 +208,28 @@ public final class Recording implements AutoCloseable
     {
         double[][][] strips = null;
         double[][] across = null;
+        double[][][] pieceCorners = new double[0][][];
+        int[][] pieceBoxes = new int[0][];
         HudPanel panel = layers.getPanel();
         HudPicture picture = layers.getPicture();
         if (panel != null && panel.shown() && video.fitsInterfaces(picture.getWidth(), picture.getHeight()))
         {
-            video.interfaces.upload(picture.getPixels());
+            List<HudPanel.Moved> moved = panel.moved();
+            video.uploadInterfaces(picture.getPixels(), moved);
+            pieceCorners = new double[moved.size()][][];
+            pieceBoxes = new int[moved.size()][];
+            int recordedPieces = 0;
+            for (HudPanel.Moved piece : moved)
+            {
+                if (piece.getPiece() == HudPiece.CHAT && config.recordHideChat())
+                {
+                    continue;
+                }
+                pieceCorners[recordedPieces] = inWorld(piece.getCorners());
+                pieceBoxes[recordedPieces++] = piece.getBox();
+            }
+            pieceCorners = Arrays.copyOf(pieceCorners, recordedPieces);
+            pieceBoxes = Arrays.copyOf(pieceBoxes, recordedPieces);
             double[][][] all = panel.strips();
             double[][] allAcross = panel.stripsAcross();
             int[] kept = panel.stripsFrom(config.recordHideChat() ? panel.chatSideEnd() : 0);
@@ -228,7 +256,7 @@ public final class Recording implements AutoCloseable
         }
         floating[SETTINGS] = ownPanel(layers.getSettingsPanel(), SETTINGS);
         floating[KEYBOARD] = ownPanel(layers.getKeyboardPanel(), KEYBOARD);
-        return new Shown(strips, across, floating);
+        return new Shown(strips, across, pieceCorners, pieceBoxes, floating);
     }
 
     private double[][] ownPanel(RoomPanel panel, int index)
@@ -307,12 +335,16 @@ public final class Recording implements AutoCloseable
     {
         private final double[][][] strips;
         private final double[][] stripsAcross;
+        private final double[][][] pieceCorners;
+        private final int[][] pieceBoxes;
         private final double[][][] floating;
 
-        private Shown(double[][][] strips, double[][] stripsAcross, double[][][] floating)
+        private Shown(double[][][] strips, double[][] stripsAcross, double[][][] pieceCorners, int[][] pieceBoxes, double[][][] floating)
         {
             this.strips = strips;
             this.stripsAcross = stripsAcross;
+            this.pieceCorners = pieceCorners;
+            this.pieceBoxes = pieceBoxes;
             this.floating = floating;
         }
     }
@@ -332,6 +364,9 @@ public final class Recording implements AutoCloseable
         private final EyesTarget picture;
         private final EyesTarget spectatorTarget;
         private final AtlasQuad interfaces;
+        /** The whole interfaces, which moved pieces are drawn from while interfaces holds the columns with them cut out. */
+        private final AtlasQuad pieces;
+        private int[] columns = new int[0];
         private final int interfacesWidth;
         private final int interfacesHeight;
         private final AtlasQuad[] floating;
@@ -350,6 +385,7 @@ public final class Recording implements AutoCloseable
             this.picture = new EyesTarget(SessionRecorder.WIDTH, SessionRecorder.HEIGHT, 1, 1);
             this.spectatorTarget = steadied ? new EyesTarget(SessionRecorder.WIDTH, SessionRecorder.HEIGHT, config.samples(), 1) : null;
             this.interfaces = new AtlasQuad(interfacesSize[0], interfacesSize[1]);
+            this.pieces = new AtlasQuad(interfacesSize[0], interfacesSize[1]);
             this.interfacesWidth = interfacesSize[0];
             this.interfacesHeight = interfacesSize[1];
             this.floatingSizes = floatingSizes;
@@ -382,6 +418,33 @@ public final class Recording implements AutoCloseable
                 recorder.close();
                 throw failed;
             }
+        }
+
+        /**
+         * Uploads the interfaces, and with pieces moved, the columns with those pieces cut out as well.
+         */
+        private void uploadInterfaces(int[] pixels, List<HudPanel.Moved> moved)
+        {
+            if (moved.isEmpty())
+            {
+                interfaces.upload(pixels);
+                return;
+            }
+            if (columns.length != pixels.length)
+            {
+                columns = new int[pixels.length];
+            }
+            System.arraycopy(pixels, 0, columns, 0, pixels.length);
+            for (HudPanel.Moved piece : moved)
+            {
+                int[] box = piece.getBox();
+                for (int row = box[1]; row < box[1] + box[3]; row++)
+                {
+                    Arrays.fill(columns, row * interfacesWidth + box[0], row * interfacesWidth + box[0] + box[2], 0);
+                }
+            }
+            interfaces.upload(columns);
+            pieces.upload(pixels);
         }
 
         private boolean fitsInterfaces(int width, int height)
@@ -452,6 +515,11 @@ public final class Recording implements AutoCloseable
                     interfaces.draw(worldToClip, shown.strips[strip], left, 0, right - left, interfacesHeight, 1);
                 }
             }
+            for (int piece = 0; piece < shown.pieceCorners.length; piece++)
+            {
+                int[] box = shown.pieceBoxes[piece];
+                pieces.draw(worldToClip, shown.pieceCorners[piece], box[0], box[1], box[2], box[3], 1);
+            }
             for (int index = 0; index < floating.length; index++)
             {
                 if (shown.floating[index] != null)
@@ -490,6 +558,7 @@ public final class Recording implements AutoCloseable
                 spectatorTarget.close();
             }
             interfaces.close();
+            pieces.close();
             for (AtlasQuad quad : floating)
             {
                 quad.close();

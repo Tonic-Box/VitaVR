@@ -30,7 +30,9 @@ import org.lwjgl.PointerBuffer;
 import java.awt.Rectangle;
 import java.time.LocalTime;
 import java.util.Arrays;
+import java.util.EnumMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * The headset layers drawn over the eyes: the interface panel, world menu, pointer label, settings and keyboard panels, and the wrist picture.
@@ -86,7 +88,10 @@ public final class Layers implements AutoCloseable
     private final List<RoomPanel> ownPanels;
     @Getter
     private final AtlasQuad wristPicture;
+    private final HudLayout layout = new HudLayout();
+    private final Map<HudPiece, int[]> boxes = new EnumMap<>(HudPiece.class);
     private volatile boolean hudShapeStale = true;
+    private volatile boolean layoutStale = true;
     private long nextTypingCheck;
     private boolean typingWanted;
     private boolean keyboardOpenedForTyping;
@@ -183,11 +188,21 @@ public final class Layers implements AutoCloseable
     }
 
     /**
-     * Marks the settings panel and interface panel shape for refresh. Safe on any thread.
+     * Marks the settings panel for repaint, and the interfaces for reshaping or the moved pieces for reloading. Safe on any thread.
+     *
+     * @param key The changed setting's key.
      */
-    public void settingsChanged()
+    public void settingsChanged(String key)
     {
-        hudShapeStale = true;
+        if (VitaVRConfig.HUD_LAYOUT.equals(key))
+        {
+            layoutStale = true;
+        }
+        // VitaVR's own saved state changes nothing about the interfaces' shape
+        else if (!VitaVRConfig.SETTINGS_TAB.equals(key) && !VitaVRConfig.TABLE_TILT.equals(key) && !VitaVRConfig.RECORD_HIDE_CHAT.equals(key))
+        {
+            hudShapeStale = true;
+        }
         ((SettingsPanel) settingsPanel.getPanel()).settingsChanged();
     }
 
@@ -235,7 +250,7 @@ public final class Layers implements AutoCloseable
         {
             cursor.paint(picture.getPixels(), picture.getWidth(), picture.getHeight(), onPanel[0], onPanel[1]);
         }
-        panel.upload(picture.getPixels());
+        panel.upload(picture.getPixels(), pieceBoxes(), pointer.getOutlined());
         if (onPanel != null)
         {
             cursor.restore(picture.getPixels());
@@ -243,10 +258,39 @@ public final class Layers implements AutoCloseable
     }
 
     /**
-     * Creates the interface panel on first use or canvas resize, and reshapes it when settings change.
+     * Finds the movable pieces on the interfaces; there are none outside the resizable layouts.
+     */
+    private Map<HudPiece, int[]> pieceBoxes()
+    {
+        boxes.clear();
+        if (client.isResized())
+        {
+            for (HudPiece piece : HudPiece.values())
+            {
+                int[] box = piece.box(this::canvasBox);
+                if (box != null)
+                {
+                    boxes.put(piece, box);
+                }
+            }
+        }
+        return boxes;
+    }
+
+    /**
+     * Creates the interface panel on first use or canvas resize, reshapes it when settings change, and loads or saves the moved pieces.
      */
     private void readyPanel(int width, int height)
     {
+        if (layoutStale)
+        {
+            layoutStale = false;
+            layout.load(config.hudLayout());
+        }
+        if (layout.takeDropped())
+        {
+            config.hudLayout(layout.format());
+        }
         if (panel != null && (panel.getPixelWidth() != width || panel.getPixelHeight() != height))
         {
             panel.close();
@@ -256,7 +300,7 @@ public final class Layers implements AutoCloseable
         {
             int chat = CHAT_SIDE_PIXELS * Math.min(width, HUD_CANVAS_WIDTH) / HUD_CANVAS_WIDTH;
             int inventory = INVENTORY_SIDE_PIXELS * Math.min(width, HUD_CANVAS_WIDTH) / HUD_CANVAS_WIDTH;
-            panel = new HudPanel(headset.getSession(), headset.getRoom(), width, height, chat, inventory, headset.isCylinders());
+            panel = new HudPanel(headset, width, height, chat, inventory, layout);
             hudShapeStale = true;
         }
         if (hudShapeStale)

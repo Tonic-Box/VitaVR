@@ -258,7 +258,11 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
         }
         tabletop = config.viewMode() == ViewMode.TABLETOP;
         layers.frame(controllers, rawHead());
-        placement.turn(controllers, config, seconds);
+        // The right stick pushes, pulls and resizes a held HUD piece instead of turning
+        if (!pointer.isMoving())
+        {
+            placement.turn(controllers, config, seconds);
+        }
         if (tabletop && !pointer.isOnPanel() && placement.tiltTable(controllers, seconds))
         {
             config.tableTiltDegrees(placement.tableTiltDegrees());
@@ -323,14 +327,16 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
     }
 
     /**
-     * Marks the settings panel for repaint. Safe on any thread.
+     * Refreshes the settings panel and interfaces after a settings change. Safe on any thread.
+     *
+     * @param key The changed setting's key.
      */
-    public void settingsChanged()
+    public void settingsChanged(String key)
     {
         Layers shown = layers;
         if (shown != null)
         {
-            shown.settingsChanged();
+            shown.settingsChanged(key);
         }
     }
 

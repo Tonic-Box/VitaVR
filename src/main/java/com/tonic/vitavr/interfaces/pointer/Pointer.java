@@ -5,6 +5,7 @@ import com.tonic.vitavr.headset.input.Controllers;
 import com.tonic.vitavr.headset.layers.HudPanel;
 import com.tonic.vitavr.headset.layers.RoomPanel;
 import com.tonic.vitavr.interfaces.hud.HudPicture;
+import com.tonic.vitavr.interfaces.hud.HudPiece;
 import com.tonic.vitavr.interfaces.wrist.WristDisplay;
 import com.tonic.vitavr.space.Pose;
 import com.tonic.vitavr.space.RoomToWorld;
@@ -20,6 +21,7 @@ import java.util.List;
 /**
  * The active hand's pointer, driving the game's picking camera and mouse.
  * Trigger is left click and selects the active hand, right grip is right click, left grip is ctrl.
+ * With the left grip held, the trigger on a HUD piece grabs it instead; while held the right stick pushes, pulls and resizes it.
  */
 public final class Pointer
 {
@@ -29,6 +31,13 @@ public final class Pointer
     private static final int CLOSE_OUTSIDE = 40;
     private static final float STICK_PUSHED = 0.7f;
     private static final long SCROLL_STEP_MILLIS = 150;
+    /** How fast a held piece moves nearer or further, in metres per second at full stick. */
+    private static final double PUSH_METRES_PER_SECOND = 1.5;
+    /** How fast a held piece grows or shrinks at full stick, doubling about this often in seconds. */
+    private static final double RESIZE_DOUBLING_SECONDS = 1.0;
+    /** How fast the left stick turns and tilts a held piece. */
+    private static final double ANGLE_DEGREES_PER_SECOND = 60;
+    private static final float STICK_DEAD = 0.15f;
 
     private final Client client;
     private final CanvasMouse mouse;
@@ -63,6 +72,12 @@ public final class Pointer
     private long crossFrom;
     private boolean walkCross;
     private boolean crossed;
+    /** The HUD piece held, or null. */
+    private HudPanel.Grab grab;
+    /** The HUD piece the pointer would move or is moving, for its outline, or null. */
+    @Getter
+    private HudPiece outlined;
+    private long lastMoveNanos;
 
     /**
      * @param client The client.
@@ -94,7 +109,7 @@ public final class Pointer
         panelCursor = null;
         menuCursor = null;
         wristCursor = null;
-        for (int hand = Controllers.LEFT; hand <= Controllers.RIGHT; hand++)
+        for (int hand = Controllers.LEFT; hand <= Controllers.RIGHT && grab == null; hand++)
         {
             if (controllers.triggerPressed(hand) || hand == Controllers.RIGHT && controllers.gripPressed(hand))
             {
@@ -154,6 +169,12 @@ public final class Pointer
             return;
         }
 
+        if (moving(controllers, held))
+        {
+            onPanel = true;
+            return;
+        }
+
         boolean ctrl = controllers.gripHeld(Controllers.LEFT);
         menuHeld = menu.follow(client.isMenuOpen());
         if (menuHeld)
@@ -184,6 +205,84 @@ public final class Pointer
             mouse.moveToViewport();
         }
         press(controllers, ctrl, held, onPanel ? null : hit, room, lift);
+    }
+
+    /**
+     * Grabs, holds and lets go of HUD pieces: with the left grip held the trigger grabs the piece pointed at, and letting go of the trigger drops it.
+     *
+     * @return Whether the pointer is on a piece to move or holding one, so nothing reaches the game this frame.
+     */
+    private boolean moving(Controllers controllers, Pose held)
+    {
+        long now = System.nanoTime();
+        double seconds = lastMoveNanos == 0 ? 0 : Math.min(0.1, (now - lastMoveNanos) / 1e9);
+        lastMoveNanos = now;
+        outlined = null;
+        if (grab != null)
+        {
+            if (panel == null || controllers.triggerReleased(activeHand))
+            {
+                if (panel != null)
+                {
+                    panel.getLayout().drop();
+                }
+                grab = null;
+                controllers.tick(activeHand);
+                return true;
+            }
+            outlined = grab.getPiece();
+            panel.hold(grab, held);
+            panelCursor = panel.crossing(held);
+            float push = deadened(controllers.stickX(Controllers.RIGHT));
+            float grow = deadened(controllers.stickY(Controllers.RIGHT));
+            float turn = deadened(controllers.stickX(Controllers.LEFT));
+            float tilt = deadened(controllers.stickY(Controllers.LEFT));
+            if (turn != 0 || tilt != 0)
+            {
+                double radians = Math.toRadians(ANGLE_DEGREES_PER_SECOND) * seconds;
+                panel.getLayout().angle(grab.getPiece(), turn * radians, tilt * radians);
+            }
+            if (push != 0)
+            {
+                panel.getLayout().pushPull(grab.getPiece(), push * PUSH_METRES_PER_SECOND * seconds);
+            }
+            if (grow != 0)
+            {
+                panel.getLayout().resize(grab.getPiece(), Math.pow(2, grow * seconds / RESIZE_DOUBLING_SECONDS));
+            }
+            return true;
+        }
+        if (panel == null || leftDown || rightDown || !controllers.gripHeld(Controllers.LEFT))
+        {
+            return false;
+        }
+        HudPanel.Grab under = panel.grabbing(held);
+        if (under == null)
+        {
+            return false;
+        }
+        outlined = under.getPiece();
+        panelCursor = panel.crossing(held);
+        if (controllers.triggerPressed(activeHand))
+        {
+            panel.lift(under.getPiece());
+            grab = under;
+            controllers.tick(activeHand);
+        }
+        return true;
+    }
+
+    private static float deadened(float stick)
+    {
+        return Math.abs(stick) < STICK_DEAD ? 0 : stick;
+    }
+
+    /**
+     * @return Whether a HUD piece is held, so the right stick moves it instead of turning.
+     */
+    public boolean isMoving()
+    {
+        return grab != null;
     }
 
     /**

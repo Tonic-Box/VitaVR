@@ -64,6 +64,7 @@ public interface VitaVRConfig extends Config
     String ONE_EYE_CAMERA = "oneEyeCamera";
     String RECORD_HIDE_CHAT = "recordHideChat";
     String SETTINGS_TAB = "settingsTab";
+    String HUD_LAYOUT = "hudLayout";
 
     @ConfigSection(name = "View", description = "How the world is seen and turned", position = 0)
     String VIEW = "view";
@@ -364,4 +365,13 @@ public interface VitaVRConfig extends Config
     {
         return "";
     }
+
+    @ConfigItem(keyName = HUD_LAYOUT, name = "", description = "", hidden = true)
+    default String hudLayout()
+    {
+        return "";
+    }
+
+    @ConfigItem(keyName = HUD_LAYOUT, name = "", description = "")
+    void hudLayout(String layout);
 }

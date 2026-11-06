@@ -431,6 +431,64 @@ public final class HudShape
         return new double[] {centreX, centreY, centreZ};
     }
 
+    /** @return The eye point the panel was placed before, in the room. */
+    public double[] eye()
+    {
+        return new double[] {centreX, centreY + BELOW_EYES, centreZ};
+    }
+
+    /** @return The panel's facing, in radians. */
+    public double yaw()
+    {
+        return yaw;
+    }
+
+    /**
+     * Gets where a picture pixel stands in the room.
+     *
+     * @param pixelX The pixel x.
+     * @param pixelY The pixel y, down.
+     * @return The room point, across, up and back.
+     */
+    public double[] pointAt(double pixelX, double pixelY)
+    {
+        int column = columnOfPixel(pixelX);
+        double up = (pixelHeight / 2.0 - pixelY) * radius * perPixel[column];
+        double[] out = new double[3];
+        if (curved)
+        {
+            arcPoint(fromAngle[column] + (pixelX - fromPixel[column]) * perPixel[column], up, out);
+            return out;
+        }
+        double[][] corners = new double[4][3];
+        chordCorners(column, corners);
+        double across = (pixelX - fromPixel[column]) / width(column);
+        double down = pixelY / pixelHeight;
+        for (int axis = 0; axis < 3; axis++)
+        {
+            out[axis] = corners[0][axis] + (corners[1][axis] - corners[0][axis]) * across + (corners[3][axis] - corners[0][axis]) * down;
+        }
+        return out;
+    }
+
+    /**
+     * @param pixelX The pixel x.
+     * @return The size of a pixel in that column, in metres.
+     */
+    public double metresPerPixelAt(double pixelX)
+    {
+        return radius * perPixel[columnOfPixel(pixelX)];
+    }
+
+    private int columnOfPixel(double pixelX)
+    {
+        if (pixelX < toPixel[LEFT])
+        {
+            return LEFT;
+        }
+        return pixelX < fromPixel[RIGHT] ? MIDDLE : RIGHT;
+    }
+
     /** @return The panel radius, in metres. */
     public double radius()
     {
