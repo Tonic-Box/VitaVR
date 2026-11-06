@@ -1,5 +1,7 @@
 package com.tonic.vitavr.render.scene.hd;
 
+import org.lwjgl.opengl.GL11;
+
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
@@ -43,6 +45,7 @@ final class HdInternals
     private final MethodHandle scenePass;
     private final MethodHandle tiledLightingPass;
     private final MethodHandle directionalShadowPass;
+    private final MethodHandle applyState;
     private final MethodHandle resetState;
     private final MethodHandle upload;
     private final MethodHandle setFloats;
@@ -103,6 +106,7 @@ final class HdInternals
             scenePass = handle(method(zoneRenderer, "scenePass"), MethodType.methodType(void.class, Object.class));
             tiledLightingPass = handle(method(zoneRenderer, "tiledLightingPass"), MethodType.methodType(void.class, Object.class));
             directionalShadowPass = handle(method(zoneRenderer, "directionalShadowPass"), MethodType.methodType(void.class, Object.class));
+            applyState = handle(method(state, "apply"), MethodType.methodType(void.class, Object.class));
             resetState = handle(method(state, "reset"), MethodType.methodType(void.class, Object.class));
             upload = handle(method(uniformBuffer, "upload"), MethodType.methodType(void.class, Object.class));
             setFloats = handle(method(property, "set", float[].class), MethodType.methodType(void.class, Object.class, float[].class));
@@ -188,10 +192,13 @@ final class HdInternals
             setInts.invokeExact(get(viewportSize, global), width, height);
             setInts.invokeExact(get(sceneResolutionUniform, global), width, height);
             upload.invokeExact(global);
-            resetState.invokeExact(renderState);
+            syncState();
             tiledLightingPass.invokeExact(renderer);
+            // The scene pass clears and draws with whatever writes the last pass left; the sky turns depth writes off
+            GL11.glDepthMask(true);
+            GL11.glColorMask(true, true, true, true);
             scenePass.invokeExact(renderer);
-            resetState.invokeExact(renderState);
+            syncState();
         }
         catch (Throwable e)
         {
@@ -203,6 +210,16 @@ final class HdInternals
             setInt(fboScene, plugin, desktop);
             setInt(msaaSamples, plugin, desktopMsaa);
         }
+    }
+
+    /**
+     * Applies the state 117 HD left pending, then forgets what it applied, since VitaVR's own GL calls between passes bypass it.
+     */
+    private void syncState() throws Throwable
+    {
+        // Pending state is only applied by the next pass, so resetting first would drop it, like the shadow pass's culling and polygon offset
+        applyState.invokeExact(renderState);
+        resetState.invokeExact(renderState);
     }
 
     /**
