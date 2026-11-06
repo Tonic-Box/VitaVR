@@ -7,6 +7,8 @@ uniform vec4 end;
 uniform vec2 span;
 uniform vec2 size;
 uniform float depthScale;
+// Turns stored depth into projected depth: 1, 0 when depth is stored zero to one, else 2, -1
+uniform vec2 storedToProjected;
 out float found;
 
 const int MOST_STEPS = 4096;
@@ -32,19 +34,20 @@ bool inFront(float u)
 {
     vec4 clip = at(u);
     float stored = storedAt(clip);
-    return stored <= 0.0 || clip.z / clip.w > stored;
+    return stored <= 0.0 || clip.z / clip.w > stored * storedToProjected.x + storedToProjected.y;
 }
 
 bool behind(float u)
 {
     vec4 clip = at(u);
     float stored = storedAt(clip);
+    float surface = stored * storedToProjected.x + storedToProjected.y;
     float ray = clip.z / clip.w;
-    if (stored <= 0.0 || ray > stored)
+    if (stored <= 0.0 || surface <= 0.0 || ray > surface)
     {
         return false;
     }
-    float surfaceAway = depthScale / stored;
+    float surfaceAway = depthScale / surface;
     return depthScale / ray - surfaceAway <= max(THICKNESS, surfaceAway * 0.05);
 }
 
@@ -63,12 +66,12 @@ void main()
             seen = true;
             continue;
         }
-        if (!seen || !behind(u))
+        if (!seen)
         {
             continue;
         }
 
-        // Narrow the hit down within the last pixel
+        // Find where the ray went behind the depth within the last pixel
         float low = float(step - 1) / float(steps);
         float high = u;
         for (int refine = 0; refine < REFINE_STEPS; refine++)
@@ -83,8 +86,14 @@ void main()
                 high = middle;
             }
         }
-        found = mix(span.x, span.y, along(high));
-        return;
+        if (behind(high))
+        {
+            found = mix(span.x, span.y, along(high));
+            return;
+        }
+
+        // It slipped behind a nearer edge, so it must come out in front again to hit anything
+        seen = false;
     }
     found = -1.0;
 }

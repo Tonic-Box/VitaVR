@@ -3,7 +3,9 @@ package com.tonic.vitavr.interfaces.pointer;
 import com.tonic.vitavr.render.EyesTarget;
 import com.tonic.vitavr.render.Shaders;
 import com.tonic.vitavr.space.View;
+import org.lwjgl.opengl.GL;
 import org.lwjgl.opengl.GL11;
+import org.lwjgl.opengl.GLCapabilities;
 import org.lwjgl.opengl.GL13;
 import org.lwjgl.opengl.GL15;
 import org.lwjgl.opengl.GL20;
@@ -19,6 +21,8 @@ public final class PointerProbe implements AutoCloseable
 {
     /** How far down the ray the walk goes, in game units. */
     private static final double REACH = 1 << 15;
+    private static final int CLIP_DEPTH_MODE = 0x935D;
+    private static final int ZERO_TO_ONE = 0x935F;
 
     private final int width;
     private final int height;
@@ -28,6 +32,8 @@ public final class PointerProbe implements AutoCloseable
     private final int spanAt;
     private final int sizeAt;
     private final int depthScaleAt;
+    private final int storedToProjectedAt;
+    private final boolean clipControl;
     private final int vertexArray;
     private final int depthTexture;
     private final int depthFramebuffer;
@@ -60,6 +66,9 @@ public final class PointerProbe implements AutoCloseable
         spanAt = GL20.glGetUniformLocation(program, "span");
         sizeAt = GL20.glGetUniformLocation(program, "size");
         depthScaleAt = GL20.glGetUniformLocation(program, "depthScale");
+        storedToProjectedAt = GL20.glGetUniformLocation(program, "storedToProjected");
+        GLCapabilities capabilities = GL.getCapabilities();
+        clipControl = capabilities.OpenGL45 || capabilities.GL_ARB_clip_control;
         GL20.glUseProgram(program);
         GL20.glUniform1i(GL20.glGetUniformLocation(program, "depths"), 0);
         GL20.glUseProgram(0);
@@ -176,6 +185,9 @@ public final class PointerProbe implements AutoCloseable
         GL20.glUniform2f(spanAt, (float) span[0], (float) span[1]);
         GL20.glUniform2f(sizeAt, width, height);
         GL20.glUniform1f(depthScaleAt, (float) View.distanceAt(1));
+        // The GPU plugin stores depth zero to one; 117 HD keeps OpenGL's default of minus one to one
+        boolean zeroToOne = clipControl && GL11.glGetInteger(CLIP_DEPTH_MODE) == ZERO_TO_ONE;
+        GL20.glUniform2f(storedToProjectedAt, zeroToOne ? 1 : 2, zeroToOne ? 0 : -1);
         GL13.glActiveTexture(GL13.GL_TEXTURE0);
         GL11.glBindTexture(GL11.GL_TEXTURE_2D, depthTexture);
         GL30.glBindVertexArray(vertexArray);
