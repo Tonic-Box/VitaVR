@@ -6,6 +6,9 @@ import com.tonic.vitavr.render.VrCallbacks;
 import com.tonic.vitavr.render.scene.SceneRenderer;
 import com.tonic.vitavr.render.scene.gpu.GpuScene;
 import com.tonic.vitavr.render.scene.hd.HdScene;
+import com.tonic.vitavr.ui.filechooser.ExtensionFileFilter;
+import com.tonic.vitavr.ui.filechooser.FileChooserDialog;
+import com.tonic.vitavr.ui.filechooser.FileChooserResult;
 import lombok.Getter;
 import lombok.Setter;
 import net.runelite.api.Actor;
@@ -25,10 +28,7 @@ import net.runelite.client.plugins.gpu.GpuPluginConfig;
 
 import javax.inject.Inject;
 import javax.inject.Singleton;
-import javax.swing.JFileChooser;
 import javax.swing.SwingUtilities;
-import javax.swing.filechooser.FileNameExtensionFilter;
-import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -238,14 +238,16 @@ public class VrSession
     }
 
     /**
-     * Refreshes the headset settings panel after a settings change. Safe on any thread.
+     * Refreshes the headset's settings and interfaces after a settings change. Safe on any thread.
+     *
+     * @param key The changed setting's key.
      */
-    public void settingsChanged()
+    public void settingsChanged(String key)
     {
         VrCallbacks shown = callbacks;
         if (shown != null)
         {
-            shown.settingsChanged();
+            shown.settingsChanged(key);
         }
     }
 
@@ -348,15 +350,14 @@ public class VrSession
      */
     private void offerRecording(Path recorded)
     {
-        JFileChooser chooser = new JFileChooser();
-        chooser.setDialogTitle("Save the session's recording");
-        chooser.setFileFilter(new FileNameExtensionFilter("MP4 video", "mp4"));
-        chooser.setSelectedFile(new File("vitavr-" + LocalDateTime.now().format(SAVED_STAMP) + ".mp4"));
+        String suggested = "vitavr-" + LocalDateTime.now().format(SAVED_STAMP) + ".mp4";
+        FileChooserResult chosen = FileChooserDialog.showSaveDialog(SwingUtilities.getWindowAncestor(client.getCanvas()), "Save the session's recording", suggested,
+                new ExtensionFileFilter("MP4 video", "mp4"));
         try
         {
-            if (chooser.showSaveDialog(SwingUtilities.getWindowAncestor(client.getCanvas())) == JFileChooser.APPROVE_OPTION)
+            if (chosen.approved() && chosen.selectedFile() != null)
             {
-                Path target = chooser.getSelectedFile().toPath();
+                Path target = chosen.selectedFile().toPath();
                 if (!target.getFileName().toString().toLowerCase().endsWith(".mp4"))
                 {
                     target = target.resolveSibling(target.getFileName() + ".mp4");
