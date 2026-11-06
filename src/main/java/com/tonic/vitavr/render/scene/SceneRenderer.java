@@ -41,10 +41,9 @@ public interface SceneRenderer extends AutoCloseable
      * @param views The views drawn this frame.
      * @param fogX Where the fog centres, across.
      * @param fogZ Where the fog centres, along.
-     * @param tableReach How far the table reaches from the fog centre, or 0 when not on the tabletop.
      * @return Whether the views can be drawn this frame.
      */
-    boolean startViews(SceneViews views, double fogX, double fogZ, double tableReach);
+    boolean startViews(SceneViews views, double fogX, double fogZ);
 
     /**
      * @return Whether the zone is drawn, with every direction in view.

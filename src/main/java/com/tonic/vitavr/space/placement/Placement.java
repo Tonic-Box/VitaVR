@@ -20,7 +20,6 @@ public final class Placement
     private static final float STICK_LET_GO = 0.3f;
     private static final float STICK_DEAD = 0.2f;
     private static final double TABLE_AHEAD_METRES = 0.55;
-    private static final double TABLE_RADIUS_METRES = 0.6;
     private static final double TILT_DEGREES_PER_SECOND = 40;
     private static final double MOST_TABLE_TILT = 60;
 
@@ -41,7 +40,6 @@ public final class Placement
     private double tableHeight;
     private double tableTilt = Double.NaN;
     private boolean tableMoved;
-    private double unitsPerMetre = 1;
 
     /**
      * Turns the room with the right thumbstick, snapped or smooth.
@@ -135,7 +133,7 @@ public final class Placement
     public boolean placeTable(Headset headset, VitaVRConfig config, double playerX, double groundY, double playerZ, double seconds)
     {
         boolean jumped = anchor.step(playerX, groundY, playerZ, seconds);
-        unitsPerMetre = config.unitsPerMetre() / config.tabletopScale();
+        double unitsPerMetre = config.unitsPerMetre() / config.tabletopScale();
         lift = 0;
         Pose left = headset.eyePose(0);
         Pose right = headset.eyePose(1);
@@ -202,14 +200,6 @@ public final class Placement
     public double groundSpeed()
     {
         return anchor.groundSpeed();
-    }
-
-    /**
-     * @return The radius shown on the table, in game units.
-     */
-    public double tableReach()
-    {
-        return TABLE_RADIUS_METRES * unitsPerMetre;
     }
 
     /**

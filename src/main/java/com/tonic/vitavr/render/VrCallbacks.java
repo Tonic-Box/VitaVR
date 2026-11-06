@@ -29,7 +29,6 @@ import com.tonic.vitavr.space.RoomToWorld;
 import com.tonic.vitavr.space.View;
 import com.tonic.vitavr.space.placement.Placement;
 import com.tonic.vitavr.world.Roofs;
-import com.tonic.vitavr.world.Zones;
 import com.tonic.vitavr.world.body.OwnBody;
 import com.tonic.vitavr.world.body.TrackedHand;
 import com.tonic.vitavr.world.overlay.ActorOverlays;
@@ -157,7 +156,6 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
     private int outlineCount;
     private boolean pointerMet;
     private boolean tabletop;
-    private double tableReach;
     private long lastFrameNanos;
     private boolean frameBegun;
     private boolean placed;
@@ -285,7 +283,6 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
         if (tabletop)
         {
             boolean jumped = placement.placeTable(headset, config, at.getX(), ground, at.getY(), seconds);
-            tableReach = placement.tableReach();
             comfort.step(0, 0, jumped, seconds);
             unitsPerMetre = placement.getRoom().getUnitsPerMetre();
         }
@@ -430,7 +427,7 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
         View centre = placement.getCentre();
         double fogX = tabletop ? placement.anchorX() : centre.eyeX();
         double fogZ = tabletop ? placement.anchorZ() : centre.eyeZ();
-        if (!renderer.startViews(views, fogX, fogZ, tabletop ? tableReach : 0))
+        if (!renderer.startViews(views, fogX, fogZ))
         {
             return;
         }
@@ -441,22 +438,6 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
         }
         drawingEyes = true;
         sceneFrom = System.nanoTime();
-    }
-
-    /**
-     * Gets whether a top level zone lies past the table's edge.
-     */
-    private boolean offTable(Scene scene, int zoneX, int zoneZ)
-    {
-        if (!tabletop || scene.getWorldViewId() != WorldView.TOPLEVEL)
-        {
-            return false;
-        }
-        double left = Zones.edge(zoneX);
-        double bottom = Zones.edge(zoneZ);
-        double dx = Math.max(0, Math.max(left - placement.anchorX(), placement.anchorX() - (left + Zones.UNITS)));
-        double dz = Math.max(0, Math.max(bottom - placement.anchorZ(), placement.anchorZ() - (bottom + Zones.UNITS)));
-        return dx * dx + dz * dz > tableReach * tableReach;
     }
 
     /**
@@ -1003,10 +984,6 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
             plugin.drawZoneOpaque(projection, scene, zoneX, zoneZ);
             return;
         }
-        if (offTable(scene, zoneX, zoneZ))
-        {
-            return;
-        }
         try
         {
             renderer.drawZoneOpaque(projection, scene, zoneX, zoneZ);
@@ -1027,10 +1004,6 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
         if (!drawingEyes)
         {
             plugin.drawZoneAlpha(projection, scene, level, zoneX, zoneZ);
-            return;
-        }
-        if (offTable(scene, zoneX, zoneZ))
-        {
             return;
         }
         try

@@ -29,8 +29,6 @@ public final class GpuScene implements SceneRenderer
             {"gpu", "syncMode", "OFF"},
             {"gpu", "fpsTarget", "0"},
     };
-    /** How many tiles the table's edge fades over. */
-    private static final int TABLE_FOG_TILES = 2;
 
     private final DrawCallbacks gpu;
     private final Client client;
@@ -43,9 +41,6 @@ public final class GpuScene implements SceneRenderer
     private int sceneFramebuffer;
     private int worldProjProgram;
     private int worldProj = -1;
-    private int useFogUniform = -1;
-    private int fogDepthUniform = -1;
-    private int drawDistanceUniform = -1;
     private int lowestLevel;
     private boolean drawing;
 
@@ -100,7 +95,7 @@ public final class GpuScene implements SceneRenderer
     }
 
     @Override
-    public boolean startViews(SceneViews views, double fogX, double fogZ, double tableReach)
+    public boolean startViews(SceneViews views, double fogX, double fogZ)
     {
         this.views = views;
         sceneFramebuffer = GL11.glGetInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
@@ -110,24 +105,21 @@ public final class GpuScene implements SceneRenderer
         {
             worldProjProgram = program;
             worldProj = GL20.glGetUniformLocation(program, "worldProj");
-            useFogUniform = GL20.glGetUniformLocation(program, "useFog");
-            fogDepthUniform = GL20.glGetUniformLocation(program, "fogDepth");
-            drawDistanceUniform = GL20.glGetUniformLocation(program, "drawDistance");
         }
         if (worldProj < 0)
         {
             return false;
         }
         GL20.glGetUniformfv(program, worldProj, gpuWorldProj);
-        centreFog(fogX, fogZ, tableReach);
+        centreFog(fogX, fogZ);
         drawing = true;
         return true;
     }
 
     /**
-     * Centres the GPU plugin's fog, fading at the table's edge on the tabletop.
+     * Centres the GPU plugin's fog.
      */
-    private void centreFog(double fogX, double fogZ, double tableReach)
+    private void centreFog(double fogX, double fogZ)
     {
         // Uniform block starts cameraYaw, cameraPitch, cameraX, cameraY, cameraZ as std140 floats
         int block = GL30.glGetIntegeri(GL31.GL_UNIFORM_BUFFER_BINDING, 0);
@@ -138,12 +130,6 @@ public final class GpuScene implements SceneRenderer
             GL15.glBufferSubData(GL31.GL_UNIFORM_BUFFER, 8, new float[]{(float) fogX});
             GL15.glBufferSubData(GL31.GL_UNIFORM_BUFFER, 16, new float[]{(float) fogZ});
             GL15.glBindBuffer(GL31.GL_UNIFORM_BUFFER, bound);
-        }
-        if (tableReach > 0 && drawDistanceUniform >= 0)
-        {
-            GL20.glUniform1i(useFogUniform, 1);
-            GL20.glUniform1i(fogDepthUniform, TABLE_FOG_TILES);
-            GL20.glUniform1i(drawDistanceUniform, (int) Math.round(tableReach));
         }
     }
 

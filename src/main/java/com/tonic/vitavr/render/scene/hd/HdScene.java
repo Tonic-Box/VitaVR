@@ -87,7 +87,7 @@ public final class HdScene implements SceneRenderer
     }
 
     @Override
-    public boolean startViews(SceneViews views, double fogX, double fogZ, double tableReach)
+    public boolean startViews(SceneViews views, double fogX, double fogZ)
     {
         this.views = views;
         EyesTarget eyes = views.getEyes();
