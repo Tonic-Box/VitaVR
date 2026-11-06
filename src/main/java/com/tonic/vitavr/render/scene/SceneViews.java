@@ -62,6 +62,14 @@ public final class SceneViews
     }
 
     /**
+     * @return The steadied recording camera's picture, drawn as the view after the eyes while spectating.
+     */
+    public EyesTarget spectatorTarget()
+    {
+        return recording.getSpectatorTarget();
+    }
+
+    /**
      * @param view The view index.
      * @return The view's world to clip matrix.
      */

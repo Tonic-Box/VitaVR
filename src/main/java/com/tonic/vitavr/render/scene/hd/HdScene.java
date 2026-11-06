@@ -154,13 +154,13 @@ public final class HdScene implements SceneRenderer
     }
 
     /**
-     * Draws the recorded scene into each eye, sharing one shadow pass.
+     * Draws the recorded scene into each eye, then the recording's steadied camera when it is due, sharing one shadow pass.
      */
     private void drawViews()
     {
         internals.drawShadows();
         EyesTarget eyes = views.getEyes();
-        for (int view = 0; view < SceneViews.EYES; view++)
+        for (int view = 0; view < views.count(); view++)
         {
             float[] worldToClip = views.worldToClip(view);
             invert(worldToClip, inverting, clipToWorld);
@@ -168,6 +168,12 @@ public final class HdScene implements SceneRenderer
             eye[0] = (float) at.eyeX();
             eye[1] = (float) at.eyeY();
             eye[2] = (float) at.eyeZ();
+            if (view >= SceneViews.EYES)
+            {
+                EyesTarget spectator = views.spectatorTarget();
+                internals.drawView(spectator.getFramebuffer(), spectator.getEyeWidth(), spectator.getEyeHeight(), spectator.getSamples(), worldToClip, clipToWorld, eye);
+                continue;
+            }
             internals.drawView(target.getFramebuffer(), target.getEyeWidth(), target.getEyeHeight(), target.getSamples(), worldToClip, clipToWorld, eye);
             eyes.copyIn(view, target);
         }
