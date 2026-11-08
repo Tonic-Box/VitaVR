@@ -2,6 +2,7 @@ package com.tonic.vitavr;
 
 import com.google.inject.Provides;
 import com.tonic.vitavr.ui.SidePanel;
+import net.runelite.api.events.GameTick;
 import net.runelite.api.events.HitsplatApplied;
 import net.runelite.api.events.MenuOptionClicked;
 import net.runelite.client.config.ConfigManager;
@@ -72,6 +73,12 @@ public class VitaVRPlugin extends Plugin
     public void onHitsplatApplied(HitsplatApplied event)
     {
         session.applied(event.getActor(), event.getHitsplat());
+    }
+
+    @Subscribe
+    public void onGameTick(GameTick event)
+    {
+        session.gameTick();
     }
 
     @Subscribe

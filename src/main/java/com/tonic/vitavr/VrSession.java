@@ -2,6 +2,8 @@ package com.tonic.vitavr;
 
 import com.tonic.Logger;
 import com.tonic.services.WorldOverlays;
+import com.tonic.vitavr.gestures.actions.GestureRunner;
+import com.tonic.vitavr.gestures.actions.VitaGame;
 import com.tonic.vitavr.gestures.store.GestureStore;
 import com.tonic.vitavr.render.VrCallbacks;
 import com.tonic.vitavr.render.scene.SceneRenderer;
@@ -98,6 +100,7 @@ public class VrSession
     private final Map<String, String> desktopSettings = new LinkedHashMap<>();
     private volatile VrCallbacks callbacks;
     private GestureStore gestureStore;
+    private GestureRunner gestureRunner;
 
     /**
      * @return The gestures, read from ~/.runelite/vitavr/gestures on first use.
@@ -110,6 +113,37 @@ public class VrSession
             gestureStore.load();
         }
         return gestureStore;
+    }
+
+    /**
+     * @return What runs the gestures' bindings, on the client thread; the headset's gestures and the editor's Run now share it.
+     */
+    public synchronized GestureRunner gestureRunner()
+    {
+        if (gestureRunner == null)
+        {
+            GestureStore store = gestures();
+            gestureRunner = new GestureRunner(new VitaGame(client), System::currentTimeMillis, name -> store.update(changing ->
+            {
+                if (changing.profile(name) != null)
+                {
+                    changing.setActive(name);
+                }
+            }));
+        }
+        return gestureRunner;
+    }
+
+    /**
+     * Moves the gestures' bindings under way on by a tick. Runs on the client thread.
+     */
+    public void gameTick()
+    {
+        GestureRunner runner = gestureRunner;
+        if (runner != null)
+        {
+            runner.tick();
+        }
     }
 
     /**
@@ -224,7 +258,7 @@ public class VrSession
                 return;
             }
         }
-        callbacks = new VrCallbacks(renderer, client, config, configManager, streamWindow, gestures(), null, this::ended);
+        callbacks = new VrCallbacks(renderer, client, config, configManager, streamWindow, gestures(), gestureRunner(), this::ended);
         client.setDrawCallbacks(callbacks);
         callbacks.applyFlags();
         WorldOverlays.setHidden(true);
