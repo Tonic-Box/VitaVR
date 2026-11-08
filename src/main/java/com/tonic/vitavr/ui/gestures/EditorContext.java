@@ -11,7 +11,9 @@ import net.runelite.client.util.AsyncBufferedImage;
 
 import javax.swing.ImageIcon;
 import javax.swing.SwingUtilities;
-import java.awt.Image;
+import java.awt.Graphics2D;
+import java.awt.RenderingHints;
+import java.awt.image.BufferedImage;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Consumer;
@@ -72,14 +74,27 @@ final class EditorContext
         {
             return cached;
         }
-        AsyncBufferedImage image = itemManager.getImage(id);
-        ImageIcon icon = new ImageIcon(image.getScaledInstance(ICON, ICON, Image.SCALE_SMOOTH));
+        ImageIcon icon = new ImageIcon(new BufferedImage(ICON, ICON, BufferedImage.TYPE_INT_ARGB));
         icons.put(id, icon);
+        AsyncBufferedImage image = itemManager.getImage(id);
         image.onLoaded(() -> SwingUtilities.invokeLater(() ->
         {
-            icon.setImage(image.getScaledInstance(ICON, ICON, Image.SCALE_SMOOTH));
+            icon.setImage(scaled(image));
             loaded.run();
         }));
         return icon;
+    }
+
+    private static BufferedImage scaled(BufferedImage image)
+    {
+        BufferedImage out = new BufferedImage(ICON, ICON, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D graphics = out.createGraphics();
+        graphics.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+        double scale = Math.min((double) ICON / image.getWidth(), (double) ICON / image.getHeight());
+        int width = (int) Math.round(image.getWidth() * scale);
+        int height = (int) Math.round(image.getHeight() * scale);
+        graphics.drawImage(image, (ICON - width) / 2, (ICON - height) / 2, width, height, null);
+        graphics.dispose();
+        return out;
     }
 }
