@@ -1,6 +1,7 @@
 package com.tonic.vitavr.headset.input;
 
 import com.tonic.Logger;
+import com.tonic.vitavr.config.ArmInput;
 import com.tonic.vitavr.space.Pose;
 import org.lwjgl.PointerBuffer;
 import org.lwjgl.openxr.XR10;
@@ -59,15 +60,28 @@ public final class Controllers implements AutoCloseable
     private final XrAction menu;
     private final XrAction view;
     private final XrAction haptic;
+    private final XrAction gripPose;
+    private final XrAction stickClick;
+    private final XrAction thumbrest;
     private final XrSpace[] aimSpaces = new XrSpace[HANDS];
+    private final XrSpace[] gripSpaces = new XrSpace[HANDS];
 
     private final Pose[] aims = new Pose[HANDS];
+    private final Pose[] grips = new Pose[HANDS];
+    private final Pose[] gripsBefore = new Pose[HANDS];
+    private final double[][] spins = new double[HANDS][3];
     private final boolean[] triggerDown = new boolean[HANDS];
     private final boolean[] triggerWasDown = new boolean[HANDS];
     private final boolean[] gripDown = new boolean[HANDS];
     private final boolean[] gripWasDown = new boolean[HANDS];
+    private final boolean[] gripConsumed = new boolean[HANDS];
+    private final boolean[] triggerConsumed = new boolean[HANDS];
+    private final boolean[] stickClickDown = new boolean[HANDS];
+    private final boolean[] thumbrestDown = new boolean[HANDS];
+    private final boolean[] thumbrestBound = new boolean[HANDS];
     private final float[] stickX = new float[HANDS];
     private final float[] stickY = new float[HANDS];
+    private long lastTime;
     private boolean hudPressed;
     private boolean keyboardPressed;
     private boolean menuPressed;
@@ -102,7 +116,13 @@ public final class Controllers implements AutoCloseable
         menu = action("settings", "Show or hide the settings", XR10.XR_ACTION_TYPE_BOOLEAN_INPUT, false);
         view = action("view", "First person or tabletop", XR10.XR_ACTION_TYPE_BOOLEAN_INPUT, false);
         haptic = action("haptic", "Tick", XR10.XR_ACTION_TYPE_VIBRATION_OUTPUT, true);
+        gripPose = action("hand", "Hand", XR10.XR_ACTION_TYPE_POSE_INPUT, true);
+        stickClick = action("stickclick", "Arm a gesture", XR10.XR_ACTION_TYPE_BOOLEAN_INPUT, true);
+        thumbrest = action("thumbrest", "Arm a gesture by touch", XR10.XR_ACTION_TYPE_BOOLEAN_INPUT, true);
         suggest("/interaction_profiles/oculus/touch_controller", new String[][]{
+                {"hand", "/user/hand/left/input/grip/pose"}, {"hand", "/user/hand/right/input/grip/pose"},
+                {"stickclick", "/user/hand/left/input/thumbstick/click"}, {"stickclick", "/user/hand/right/input/thumbstick/click"},
+                {"thumbrest", "/user/hand/left/input/thumbrest/touch"}, {"thumbrest", "/user/hand/right/input/thumbrest/touch"},
                 {"aim", "/user/hand/left/input/aim/pose"}, {"aim", "/user/hand/right/input/aim/pose"},
                 {"trigger", "/user/hand/left/input/trigger/value"}, {"trigger", "/user/hand/right/input/trigger/value"},
                 {"grip", "/user/hand/left/input/squeeze/value"}, {"grip", "/user/hand/right/input/squeeze/value"},
@@ -111,6 +131,8 @@ public final class Controllers implements AutoCloseable
                 {"settings", "/user/hand/left/input/x/click"}, {"settings", "/user/hand/left/input/menu/click"}, {"view", "/user/hand/right/input/a/click"},
                 {"haptic", "/user/hand/left/output/haptic"}, {"haptic", "/user/hand/right/output/haptic"}});
         suggest("/interaction_profiles/valve/index_controller", new String[][]{
+                {"hand", "/user/hand/left/input/grip/pose"}, {"hand", "/user/hand/right/input/grip/pose"},
+                {"stickclick", "/user/hand/left/input/thumbstick/click"}, {"stickclick", "/user/hand/right/input/thumbstick/click"},
                 {"aim", "/user/hand/left/input/aim/pose"}, {"aim", "/user/hand/right/input/aim/pose"},
                 {"trigger", "/user/hand/left/input/trigger/value"}, {"trigger", "/user/hand/right/input/trigger/value"},
                 {"grip", "/user/hand/left/input/squeeze/value"}, {"grip", "/user/hand/right/input/squeeze/value"},
@@ -119,6 +141,7 @@ public final class Controllers implements AutoCloseable
                 {"settings", "/user/hand/left/input/a/click"}, {"view", "/user/hand/right/input/a/click"},
                 {"haptic", "/user/hand/left/output/haptic"}, {"haptic", "/user/hand/right/output/haptic"}});
         suggest("/interaction_profiles/khr/simple_controller", new String[][]{
+                {"hand", "/user/hand/left/input/grip/pose"}, {"hand", "/user/hand/right/input/grip/pose"},
                 {"aim", "/user/hand/left/input/aim/pose"}, {"aim", "/user/hand/right/input/aim/pose"},
                 {"trigger", "/user/hand/left/input/select/click"}, {"trigger", "/user/hand/right/input/select/click"},
                 {"settings", "/user/hand/left/input/menu/click"}, {"hud", "/user/hand/right/input/menu/click"},
@@ -129,14 +152,20 @@ public final class Controllers implements AutoCloseable
             check(XR10.xrAttachSessionActionSets(session, attach), instance, "Giving the session the controllers' actions");
             for (int hand = 0; hand < HANDS; hand++)
             {
-                XrPosef identity = XrPosef.calloc(stack);
-                identity.orientation().w(1);
-                XrActionSpaceCreateInfo info = XrActionSpaceCreateInfo.calloc(stack).type$Default().action(aim).subactionPath(handPaths[hand]).poseInActionSpace(identity);
-                PointerBuffer made = stack.mallocPointer(1);
-                check(XR10.xrCreateActionSpace(session, info, made), instance, "Making a hand's aim");
-                aimSpaces[hand] = new XrSpace(made.get(0), session);
+                aimSpaces[hand] = actionSpace(aim, hand, "Making a hand's aim", stack);
+                gripSpaces[hand] = actionSpace(gripPose, hand, "Making a hand's grip", stack);
             }
         }
+    }
+
+    private XrSpace actionSpace(XrAction action, int hand, String doing, MemoryStack stack)
+    {
+        XrPosef identity = XrPosef.calloc(stack);
+        identity.orientation().w(1);
+        XrActionSpaceCreateInfo info = XrActionSpaceCreateInfo.calloc(stack).type$Default().action(action).subactionPath(handPaths[hand]).poseInActionSpace(identity);
+        PointerBuffer made = stack.mallocPointer(1);
+        check(XR10.xrCreateActionSpace(session, info, made), instance, doing);
+        return new XrSpace(made.get(0), session);
     }
 
     private long path(String text)
@@ -205,6 +234,12 @@ public final class Controllers implements AutoCloseable
                 return view;
             case "haptic":
                 return haptic;
+            case "hand":
+                return gripPose;
+            case "stickclick":
+                return stickClick;
+            case "thumbrest":
+                return thumbrest;
             default:
                 throw new IllegalArgumentException("No action " + name);
         }
@@ -223,28 +258,44 @@ public final class Controllers implements AutoCloseable
             XrActiveActionSet.Buffer active = XrActiveActionSet.calloc(1, stack);
             active.get(0).actionSet(set);
             check(XR10.xrSyncActions(session, XrActionsSyncInfo.calloc(stack).type$Default().activeActionSets(active)), instance, "Reading the controllers");
+            double seconds = lastTime == 0 ? 0 : (time - lastTime) / 1e9;
+            lastTime = time;
             for (int hand = 0; hand < HANDS; hand++)
             {
                 triggerWasDown[hand] = triggerDown[hand];
                 gripWasDown[hand] = gripDown[hand];
                 triggerDown[hand] = held(floatState(trigger, hand, stack), triggerDown[hand]);
                 gripDown[hand] = held(floatState(grip, hand, stack), gripDown[hand]);
+                if (!gripDown[hand] && !gripWasDown[hand])
+                {
+                    gripConsumed[hand] = false;
+                }
+                if (!triggerDown[hand] && !triggerWasDown[hand])
+                {
+                    triggerConsumed[hand] = false;
+                }
                 XrActionStateVector2f vector = XrActionStateVector2f.calloc(stack).type$Default();
                 check(XR10.xrGetActionStateVector2f(session, info(stick, handPaths[hand], stack), vector), instance, "Reading a thumbstick");
                 stickX[hand] = vector.isActive() ? vector.currentState().x() : 0;
                 stickY[hand] = vector.isActive() ? vector.currentState().y() : 0;
-                XrSpaceLocation location = XrSpaceLocation.calloc(stack).type$Default();
-                check(XR10.xrLocateSpace(aimSpaces[hand], room, time, location), instance, "Finding a hand");
-                long valid = XR10.XR_SPACE_LOCATION_ORIENTATION_VALID_BIT | XR10.XR_SPACE_LOCATION_POSITION_VALID_BIT;
-                if ((location.locationFlags() & valid) == valid)
+                stickClickDown[hand] = boolState(stickClick, hand, stack) == Boolean.TRUE;
+                Boolean rest = boolState(thumbrest, hand, stack);
+                thumbrestBound[hand] = rest != null;
+                thumbrestDown[hand] = rest == Boolean.TRUE;
+                aims[hand] = locate(aimSpaces[hand], room, time, stack);
+                gripsBefore[hand] = grips[hand];
+                grips[hand] = locate(gripSpaces[hand], room, time, stack);
+                if (grips[hand] == null)
                 {
-                    XrPosef pose = location.pose();
-                    aims[hand] = new Pose(pose.position$().x(), pose.position$().y(), pose.position$().z(), pose.orientation().x(), pose.orientation().y(),
-                            pose.orientation().z(), pose.orientation().w());
+                    grips[hand] = aims[hand];
+                }
+                if (gripsBefore[hand] != null && grips[hand] != null && seconds > 0)
+                {
+                    Pose.angularVelocity(gripsBefore[hand], grips[hand], seconds, spins[hand]);
                 }
                 else
                 {
-                    aims[hand] = null;
+                    spins[hand][0] = spins[hand][1] = spins[hand][2] = 0;
                 }
             }
             hudPressed = pressed(hud, stack);
@@ -252,6 +303,27 @@ public final class Controllers implements AutoCloseable
             menuPressed = pressed(menu, stack);
             viewPressed = pressed(view, stack);
         }
+    }
+
+    private Pose locate(XrSpace space, XrSpace room, long time, MemoryStack stack)
+    {
+        XrSpaceLocation location = XrSpaceLocation.calloc(stack).type$Default();
+        check(XR10.xrLocateSpace(space, room, time, location), instance, "Finding a hand");
+        long valid = XR10.XR_SPACE_LOCATION_ORIENTATION_VALID_BIT | XR10.XR_SPACE_LOCATION_POSITION_VALID_BIT;
+        if ((location.locationFlags() & valid) != valid)
+        {
+            return null;
+        }
+        XrPosef pose = location.pose();
+        return new Pose(pose.position$().x(), pose.position$().y(), pose.position$().z(), pose.orientation().x(), pose.orientation().y(),
+                pose.orientation().z(), pose.orientation().w());
+    }
+
+    private Boolean boolState(XrAction action, int hand, MemoryStack stack)
+    {
+        XrActionStateBoolean state = XrActionStateBoolean.calloc(stack).type$Default();
+        check(XR10.xrGetActionStateBoolean(session, info(action, handPaths[hand], stack), state), instance, "Reading a button");
+        return state.isActive() ? state.currentState() : null;
     }
 
     private float floatState(XrAction action, int hand, MemoryStack stack)
@@ -293,7 +365,7 @@ public final class Controllers implements AutoCloseable
      */
     public boolean triggerPressed(int hand)
     {
-        return triggerDown[hand] && !triggerWasDown[hand];
+        return !triggerConsumed[hand] && triggerDown[hand] && !triggerWasDown[hand];
     }
 
     /**
@@ -302,7 +374,7 @@ public final class Controllers implements AutoCloseable
      */
     public boolean triggerReleased(int hand)
     {
-        return !triggerDown[hand] && triggerWasDown[hand];
+        return !triggerConsumed[hand] && !triggerDown[hand] && triggerWasDown[hand];
     }
 
     /**
@@ -311,7 +383,7 @@ public final class Controllers implements AutoCloseable
      */
     public boolean gripPressed(int hand)
     {
-        return gripDown[hand] && !gripWasDown[hand];
+        return !gripConsumed[hand] && gripDown[hand] && !gripWasDown[hand];
     }
 
     /**
@@ -320,7 +392,7 @@ public final class Controllers implements AutoCloseable
      */
     public boolean gripReleased(int hand)
     {
-        return !gripDown[hand] && gripWasDown[hand];
+        return !gripConsumed[hand] && !gripDown[hand] && gripWasDown[hand];
     }
 
     /**
@@ -329,7 +401,91 @@ public final class Controllers implements AutoCloseable
      */
     public boolean gripHeld(int hand)
     {
+        return !gripConsumed[hand] && gripDown[hand];
+    }
+
+    /**
+     * Keeps a hand's grip from the pointer until it is let go, for a gesture that took it.
+     *
+     * @param hand LEFT or RIGHT.
+     */
+    public void consumeGrip(int hand)
+    {
+        gripConsumed[hand] = true;
+    }
+
+    /**
+     * Keeps a hand's trigger from the pointer until it is let go, for a gesture that took it.
+     *
+     * @param hand LEFT or RIGHT.
+     */
+    public void consumeTrigger(int hand)
+    {
+        triggerConsumed[hand] = true;
+    }
+
+    /**
+     * @param hand LEFT or RIGHT.
+     * @return Whether the grip went down this frame, whoever has it.
+     */
+    public boolean gripWentDown(int hand)
+    {
+        return gripDown[hand] && !gripWasDown[hand];
+    }
+
+    /**
+     * @param hand LEFT or RIGHT.
+     * @return Whether the grip is down, whoever has it.
+     */
+    public boolean gripDown(int hand)
+    {
         return gripDown[hand];
+    }
+
+    /**
+     * @param hand LEFT or RIGHT.
+     * @return Whether the trigger is down, whoever has it.
+     */
+    public boolean triggerDown(int hand)
+    {
+        return triggerDown[hand];
+    }
+
+    /**
+     * @param hand LEFT or RIGHT.
+     * @param input What arms a gesture on that hand.
+     * @return Whether the hand holds what arms a gesture; the thumb rest falls back to the thumbstick click where there is none.
+     */
+    public boolean armHeld(int hand, ArmInput input)
+    {
+        switch (input)
+        {
+            case THUMBREST_TOUCH:
+                return thumbrestBound[hand] ? thumbrestDown[hand] : stickClickDown[hand];
+            case GRIP_AND_TRIGGER:
+                return gripDown[hand] && triggerDown[hand];
+            case THUMBSTICK_CLICK:
+            default:
+                return stickClickDown[hand];
+        }
+    }
+
+    /**
+     * @param hand LEFT or RIGHT.
+     * @return The hand's grip pose in the room, the aim where the runtime gives no grip, or null while not tracked.
+     */
+    public Pose grip(int hand)
+    {
+        return grips[hand];
+    }
+
+    /**
+     * @param hand LEFT or RIGHT.
+     * @return The hand's turn rate in the room, radians a second about each axis; the array is reused.
+     */
+    public double[] spin(int hand)
+    {
+        return spins[hand];
     }
 
     /**
@@ -421,11 +577,15 @@ public final class Controllers implements AutoCloseable
             return;
         }
         closed = true;
-        for (XrSpace space : aimSpaces)
+        for (int hand = 0; hand < HANDS; hand++)
         {
-            if (space != null)
+            if (aimSpaces[hand] != null)
             {
-                XR10.xrDestroySpace(space);
+                XR10.xrDestroySpace(aimSpaces[hand]);
+            }
+            if (gripSpaces[hand] != null)
+            {
+                XR10.xrDestroySpace(gripSpaces[hand]);
             }
         }
         XR10.xrDestroyActionSet(set);

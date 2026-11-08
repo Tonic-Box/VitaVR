@@ -80,6 +80,39 @@ public class Pose
     }
 
     /**
+     * Gets the turn rate that takes one orientation to another, the shorter way round.
+     *
+     * @param from    The earlier pose.
+     * @param to      The later pose.
+     * @param seconds The time between them.
+     * @param out     Receives the turn rate in the room, radians a second about x, y and z.
+     */
+    public static void angularVelocity(Pose from, Pose to, double seconds, double[] out)
+    {
+        double w = to.qw * from.qw + to.qx * from.qx + to.qy * from.qy + to.qz * from.qz;
+        double x = -to.qw * from.qx + to.qx * from.qw - to.qy * from.qz + to.qz * from.qy;
+        double y = -to.qw * from.qy + to.qx * from.qz + to.qy * from.qw - to.qz * from.qx;
+        double z = -to.qw * from.qz - to.qx * from.qy + to.qy * from.qx + to.qz * from.qw;
+        if (w < 0)
+        {
+            w = -w;
+            x = -x;
+            y = -y;
+            z = -z;
+        }
+        double sine = Math.sqrt(x * x + y * y + z * z);
+        if (sine < 1e-12 || seconds <= 0)
+        {
+            out[0] = out[1] = out[2] = 0;
+            return;
+        }
+        double rate = 2 * Math.atan2(sine, w) / seconds / sine;
+        out[0] = x * rate;
+        out[1] = y * rate;
+        out[2] = z * rate;
+    }
+
+    /**
      * Gets the yaw of this pose.
      *
      * @return The yaw in radians, 0 facing -z, left positive.

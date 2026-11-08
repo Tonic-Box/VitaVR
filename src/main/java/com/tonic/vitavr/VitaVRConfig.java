@@ -1,5 +1,6 @@
 package com.tonic.vitavr;
 
+import com.tonic.vitavr.config.ArmInput;
 import com.tonic.vitavr.config.HeadFollow;
 import com.tonic.vitavr.config.HeldItems;
 import com.tonic.vitavr.config.OneEyeCamera;
@@ -66,6 +67,10 @@ public interface VitaVRConfig extends Config
     String STREAM_WINDOW = "streamWindow";
     String SETTINGS_TAB = "settingsTab";
     String HUD_LAYOUT = "hudLayout";
+    String ARM_LEFT = "gestureArmLeft";
+    String ARM_RIGHT = "gestureArmRight";
+    String BODY_EASE = "gestureBodyEaseMs";
+    String GESTURE_PROFILE = "gestureProfile";
 
     @ConfigSection(name = "View", description = "How the world is seen and turned", position = 0)
     String VIEW = "view";
@@ -81,6 +86,9 @@ public interface VitaVRConfig extends Config
 
     @ConfigSection(name = "Recording and streaming", description = "Recording a session to video, and the stream window", position = 4)
     String RECORDING = "recording";
+
+    @ConfigSection(name = "Gestures", description = "Drawing and holding gestures", position = 5)
+    String GESTURES = "gestures";
 
     @ConfigItem(keyName = VIEW_MODE, name = "View", description = "First person, or the world as a table in front of you", position = 0, section = VIEW)
     default ViewMode viewMode()
@@ -381,4 +389,32 @@ public interface VitaVRConfig extends Config
 
     @ConfigItem(keyName = HUD_LAYOUT, name = "", description = "")
     void hudLayout(String layout);
+
+    @ConfigItem(keyName = ARM_LEFT, name = "Left hand arms with", description = "What the left hand holds while drawing a gesture (grip and trigger also clicks and right-clicks)", position = 0, section = GESTURES)
+    default ArmInput gestureArmLeft()
+    {
+        return ArmInput.THUMBSTICK_CLICK;
+    }
+
+    @ConfigItem(keyName = ARM_RIGHT, name = "Right hand arms with", description = "What the right hand holds while drawing a gesture (grip and trigger also clicks and right-clicks)", position = 1, section = GESTURES)
+    default ArmInput gestureArmRight()
+    {
+        return ArmInput.THUMBSTICK_CLICK;
+    }
+
+    @Range(min = 0, max = 2000)
+    @ConfigItem(keyName = BODY_EASE, name = "Body follows head", description = "Milliseconds the body frame gestures are kept in takes to follow a turn of the head", position = 2, section = GESTURES)
+    default int gestureBodyEaseMs()
+    {
+        return 400;
+    }
+
+    @ConfigItem(keyName = GESTURE_PROFILE, name = "", description = "", hidden = true)
+    default String gestureProfile()
+    {
+        return "";
+    }
+
+    @ConfigItem(keyName = GESTURE_PROFILE, name = "", description = "")
+    void gestureProfile(String profile);
 }

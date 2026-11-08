@@ -33,6 +33,7 @@ import java.util.Arrays;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * The headset layers drawn over the eyes: the interface panel, world menu, pointer label, settings and keyboard panels, and the wrist picture.
@@ -40,6 +41,8 @@ import java.util.Map;
 public final class Layers implements AutoCloseable
 {
     /** The canvas width the chat and inventory side widths are measured against. */
+    private static final Set<String> KEEPS_SHAPE = Set.of(VitaVRConfig.SETTINGS_TAB, VitaVRConfig.TABLE_TILT, VitaVRConfig.RECORD_HIDE_CHAT, VitaVRConfig.STREAM_WINDOW,
+            VitaVRConfig.ARM_LEFT, VitaVRConfig.ARM_RIGHT, VitaVRConfig.BODY_EASE, VitaVRConfig.GESTURE_PROFILE);
     private static final int HUD_CANVAS_WIDTH = 1760;
     private static final int CHAT_SIDE_PIXELS = 520;
     private static final int INVENTORY_SIDE_PIXELS = 260;
@@ -199,8 +202,7 @@ public final class Layers implements AutoCloseable
             layoutStale = true;
         }
         // VitaVR's own saved state changes nothing about the interfaces' shape
-        else if (!VitaVRConfig.SETTINGS_TAB.equals(key) && !VitaVRConfig.TABLE_TILT.equals(key) && !VitaVRConfig.RECORD_HIDE_CHAT.equals(key)
-                && !VitaVRConfig.STREAM_WINDOW.equals(key))
+        else if (!KEEPS_SHAPE.contains(key))
         {
             hudShapeStale = true;
         }
