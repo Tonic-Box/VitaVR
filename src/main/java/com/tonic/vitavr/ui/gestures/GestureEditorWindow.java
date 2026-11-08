@@ -286,7 +286,7 @@ public final class GestureEditorWindow
     {
         if (context.getStore().version() == shownVersion)
         {
-            gestureList.repaint();
+            refreshGestureItems();
             return;
         }
         shownVersion = context.getStore().version();
@@ -404,8 +404,34 @@ public final class GestureEditorWindow
                 change.accept(gesture);
             }
         });
-        gestureList.repaint();
+        refreshGestureItems();
         previewShows.accept(selected());
+    }
+
+    /**
+     * Puts the store's current copy of each listed gesture in the list, so a name, hand or binding changed here shows.
+     */
+    private void refreshGestureItems()
+    {
+        Gestures gestures = snapshot();
+        boolean wasLoading = loading;
+        loading = true;
+        try
+        {
+            for (int i = 0; i < gestureModel.size(); i++)
+            {
+                Gesture now = gestures.gesture(gestureModel.get(i).getId());
+                if (now != null)
+                {
+                    gestureModel.set(i, now);
+                }
+            }
+        }
+        finally
+        {
+            loading = wasLoading;
+        }
+        gestureList.repaint();
     }
 
     private Binding binding(Gestures gestures)
@@ -469,7 +495,7 @@ public final class GestureEditorWindow
             {
                 editBinding(edited -> edited.getSteps().set(index, changed));
                 stepModel.set(index, (index + 1) + ". " + changed.describe());
-                gestureList.repaint();
+                refreshGestureItems();
             }), BorderLayout.CENTER);
         }
         stepForm.revalidate();
@@ -519,7 +545,7 @@ public final class GestureEditorWindow
         Binding binding = binding(snapshot());
         selectedStep = binding == null ? -1 : binding.getSteps().size() - 1;
         showSteps();
-        gestureList.repaint();
+        refreshGestureItems();
     }
 
     /**
@@ -556,7 +582,7 @@ public final class GestureEditorWindow
         });
         selectedStep = how == 0 ? Math.min(index, binding.getSteps().size() - 2) : how == 2 ? index + 1 : target;
         showSteps();
-        gestureList.repaint();
+        refreshGestureItems();
     }
 
     private void runNow()
