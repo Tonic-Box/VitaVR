@@ -31,6 +31,7 @@ public class VitaVRPlugin extends Plugin
     private VrSession session;
 
     private NavigationButton navButton;
+    private SidePanel panel;
 
     @Provides
     VitaVRConfig provideConfig(ConfigManager configManager)
@@ -41,7 +42,7 @@ public class VitaVRPlugin extends Plugin
     @Override
     protected void startUp()
     {
-        SidePanel panel = injector.getInstance(SidePanel.class);
+        panel = injector.getInstance(SidePanel.class);
 
         final BufferedImage icon = ImageUtil.loadImageResource(getClass(), "icon.png");
 
@@ -91,13 +92,19 @@ public class VitaVRPlugin extends Plugin
     protected void shutDown()
     {
         // Never leave the client without its desktop renderer
-        if (SwingUtilities.isEventDispatchThread())
+        SidePanel closing = panel;
+        Runnable stop = () ->
         {
             session.stop();
+            closing.close();
+        };
+        if (SwingUtilities.isEventDispatchThread())
+        {
+            stop.run();
         }
         else
         {
-            SwingUtilities.invokeLater(session::stop);
+            SwingUtilities.invokeLater(stop);
         }
         clientToolbar.removeNavigation(navButton);
     }

@@ -118,6 +118,15 @@ public final class GestureEditorWindow
     }
 
     /**
+     * Closes the window for good and stops following the gestures. Call on the Swing thread.
+     */
+    public void close()
+    {
+        context.getStore().removeListener(storeChanged);
+        frame.dispose();
+    }
+
+    /**
      * Shows the window, in front, reading the gestures afresh. Call on the Swing thread.
      */
     public void open()

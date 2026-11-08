@@ -42,6 +42,7 @@ public class SidePanel extends PluginPanel
     private final ItemManager itemManager;
     private GestureEditorWindow editor;
     private boolean loadingProfiles;
+    private final Runnable profilesChanged = () -> SwingUtilities.invokeLater(this::showProfiles);
 
     @Inject
     public SidePanel(VrSession session, Client client, VitaVRConfig config, ConfigManager configManager, ClientThread clientThread, ItemManager itemManager)
@@ -130,12 +131,25 @@ public class SidePanel extends PluginPanel
         add(new JPanel(), c);
         refresh(null);
 
-        session.gestures().addListener(() -> SwingUtilities.invokeLater(this::showProfiles));
+        session.gestures().addListener(profilesChanged);
         showProfiles();
 
         // The headset can end VR by itself
         session.setOnEnded(this::refresh);
         session.setOnStreamClosed(() -> streamBox.setSelected(false));
+    }
+
+    /**
+     * Stops following the gestures and closes the editor, when the plugin stops. Call on the Swing thread.
+     */
+    public void close()
+    {
+        session.gestures().removeListener(profilesChanged);
+        if (editor != null)
+        {
+            editor.close();
+            editor = null;
+        }
     }
 
     private void showProfiles()
