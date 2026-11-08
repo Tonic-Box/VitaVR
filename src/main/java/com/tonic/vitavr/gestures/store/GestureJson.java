@@ -62,13 +62,13 @@ public final class GestureJson
 
     /**
      * @param value What to copy.
-     * @param type Its class.
+     * @param type The class to copy it as; a step copied as AbstractStep keeps its kind.
      * @param <T> Its type.
      * @return A copy sharing nothing with it.
      */
     public static <T> T copy(T value, Class<T> type)
     {
-        return GSON.fromJson(GSON.toJsonTree(value), type);
+        return GSON.fromJson(GSON.toJsonTree(value, type), type);
     }
 
     private static final class StepFactory implements TypeAdapterFactory

@@ -150,6 +150,18 @@ class GestureStoreTest
     }
 
     @Test
+    void aStepCopiedAsAnyStepKeepsItsKindAndFields()
+    {
+        PrayerStep prayer = new PrayerStep();
+        prayer.getPrayers().add("PIETY");
+        prayer.setMode(PrayerStep.Mode.TOGGLE);
+
+        Object copy = GestureJson.copy(prayer, com.tonic.vitavr.gestures.model.steps.AbstractStep.class);
+
+        assertEquals(prayer, copy);
+    }
+
+    @Test
     void profileNamesBecomeSafeDistinctFileNames()
     {
         Set<Path> taken = new HashSet<>();
