@@ -33,4 +33,52 @@ public class Gesture
     private double peakSpin;
     /** The head's height above the floor when recorded, in metres. */
     private double headHeight = 1.65;
+
+    /**
+     * @return The hand the takes were made with, 0 left or 1 right; the right when they hold both or neither.
+     */
+    public int recordedHand()
+    {
+        for (Take take : takes)
+        {
+            if (!take.getLeft().isEmpty() && take.getRight().isEmpty())
+            {
+                return 0;
+            }
+            if (!take.getRight().isEmpty())
+            {
+                return 1;
+            }
+        }
+        return hand == GestureHand.LEFT ? 0 : 1;
+    }
+
+    /**
+     * @param handIndex 0 left or 1 right.
+     * @return Whether the gesture is made with that hand, and if so whether it is mirrored from the hand it was recorded with.
+     */
+    public boolean madeWith(int handIndex)
+    {
+        switch (hand)
+        {
+            case LEFT:
+                return handIndex == 0;
+            case RIGHT:
+                return handIndex == 1;
+            case EITHER:
+                return true;
+            case BOTH:
+            default:
+                return false;
+        }
+    }
+
+    /**
+     * @param handIndex 0 left or 1 right.
+     * @return Whether the hand makes this gesture mirrored, being the other hand to the one it was recorded with.
+     */
+    public boolean mirroredFor(int handIndex)
+    {
+        return hand == GestureHand.EITHER && handIndex != recordedHand();
+    }
 }
