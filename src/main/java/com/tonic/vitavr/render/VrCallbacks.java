@@ -3,6 +3,9 @@ package com.tonic.vitavr.render;
 import com.tonic.Logger;
 import com.tonic.vitavr.VitaVRConfig;
 import com.tonic.vitavr.config.ViewMode;
+import com.tonic.vitavr.gestures.store.GestureStore;
+import com.tonic.vitavr.gestures.vr.GestureActions;
+import com.tonic.vitavr.gestures.vr.GestureSession;
 import com.tonic.vitavr.headset.Headset;
 import com.tonic.vitavr.headset.input.Controllers;
 import com.tonic.vitavr.headset.input.Haptics;
@@ -60,8 +63,10 @@ import org.lwjgl.opengl.WGL;
 import org.lwjgl.system.MemoryStack;
 
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 import java.util.Set;
 import java.util.function.Consumer;
 
@@ -95,6 +100,8 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
     private static final double WALL_DARKEN_SECONDS = 0.04;
     private static final double WALL_CLEAR_SECONDS = 0.15;
     /** How far ahead of and below the eyes the own head stack hangs in first person, in metres. */
+    private static final int SPOT_RING = 0x70E0C060;
+    private static final int SPOT_RING_OFF = 0x40808080;
     private static final double OWN_AHEAD_METRES = 0.7;
     private static final double OWN_BELOW_METRES = 0.3;
     /** How far below the own head stack the own hitsplats hang, in metres. */
@@ -109,6 +116,12 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
     private final CanvasKeys keys;
     private final Consumer<String> onEnded;
     private final StreamWindow streamWindow;
+    private final GestureStore gestureStore;
+    private final GestureActions gestureActions;
+    private GestureSession gestures;
+    private final List<double[]> gestureLines = new ArrayList<>();
+    private final List<Integer> gestureColours = new ArrayList<>();
+    private final List<double[]> gestureSpots = new ArrayList<>();
 
     private final Placement placement = new Placement();
     private final OwnBody ownBody = new OwnBody();
@@ -173,10 +186,15 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
      * @param config The plugin config.
      * @param configManager The config manager the settings panel writes to.
      * @param streamWindow The stream window, sent the composite picture while open.
+     * @param gestureStore The gestures, recorded and recognised in the headset.
+     * @param gestureActions Runs what a gesture is bound to, or null to only show it.
      * @param onEnded Receives the reason, on the client thread, when the session ends or fails.
      */
-    public VrCallbacks(SceneRenderer renderer, Client client, VitaVRConfig config, ConfigManager configManager, StreamWindow streamWindow, Consumer<String> onEnded)
+    public VrCallbacks(SceneRenderer renderer, Client client, VitaVRConfig config, ConfigManager configManager, StreamWindow streamWindow, GestureStore gestureStore,
+            GestureActions gestureActions, Consumer<String> onEnded)
     {
+        this.gestureStore = gestureStore;
+        this.gestureActions = gestureActions;
         this.streamWindow = streamWindow;
         this.configManager = configManager;
         this.keys = new CanvasKeys(client);
@@ -262,6 +280,8 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
         }
         tabletop = config.viewMode() == ViewMode.TABLETOP;
         layers.frame(controllers, rawHead());
+        // Gestures read the hands first, so a spot's grip never reaches the pointer
+        gestures.frame(controllers, rawHead(), headset.floorHeight(), seconds, layers.pausesGestures());
         // The right stick pushes, pulls and resizes a held HUD piece instead of turning
         if (!pointer.isMoving())
         {
@@ -286,6 +306,7 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
         if (headset.takeRecentred())
         {
             placement.recalibrate();
+            gestures.reseed();
         }
         double unitsPerMetre;
         if (tabletop)
@@ -370,6 +391,7 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
         config.viewMode(config.viewMode() == ViewMode.TABLETOP ? ViewMode.FIRST_PERSON : ViewMode.TABLETOP);
         placement.resetTable();
         ownBody.reset();
+        gestures.reseed();
     }
 
     /**
@@ -477,6 +499,59 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
         if (cross != 0 && scale > 0)
         {
             markers.draw(view, matrix, crossAt, CROSS_RADIANS * scale, Markers.CROSS, cross);
+        }
+    }
+
+    /**
+     * Gathers the frame's gesture trails and, while the Gestures tab is open, the spots, in the world.
+     */
+    private void prepareGestures()
+    {
+        gestureLines.clear();
+        gestureColours.clear();
+        gestureSpots.clear();
+        List<double[]> room = new ArrayList<>();
+        gestures.trails(room, gestureColours);
+        for (double[] line : room)
+        {
+            double[] world = new double[6];
+            placement.toWorld(line[0], line[1], line[2], beamFrom);
+            placement.toWorld(line[3], line[4], line[5], beamTo);
+            System.arraycopy(beamFrom, 0, world, 0, 3);
+            System.arraycopy(beamTo, 0, world, 3, 3);
+            gestureLines.add(world);
+        }
+        for (double[] spot : gestures.spots(layers.showsGestures()))
+        {
+            double[] world = new double[5];
+            placement.toWorld(spot[0], spot[1], spot[2], beamFrom);
+            System.arraycopy(beamFrom, 0, world, 0, 3);
+            world[3] = spot[3] * placement.getRoom().getUnitsPerMetre();
+            world[4] = spot[4];
+            gestureSpots.add(world);
+        }
+    }
+
+    /**
+     * Draws the gesture trails and spots into the bound view.
+     */
+    private void drawGestures(View view, float[] matrix)
+    {
+        for (int line = 0; line < gestureLines.size(); line++)
+        {
+            double[] at = gestureLines.get(line);
+            outlineFrom[0] = at[0];
+            outlineFrom[1] = at[1];
+            outlineFrom[2] = at[2];
+            outlineTo[0] = at[3];
+            outlineTo[1] = at[4];
+            outlineTo[2] = at[5];
+            beams.draw(matrix, outlineFrom, outlineTo, gestureColours.get(line));
+        }
+        for (double[] spot : gestureSpots)
+        {
+            double away = Math.sqrt(square(spot[0] - view.eyeX()) + square(spot[1] - view.eyeY()) + square(spot[2] - view.eyeZ()));
+            markers.draw(view, matrix, spot, Math.atan2(spot[3], Math.max(1, away)), Markers.DOT, spot[4] > 0 ? SPOT_RING : SPOT_RING_OFF);
         }
     }
 
@@ -780,6 +855,7 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
     private void drawOver(View view, float[] matrix)
     {
         drawTiles(matrix);
+        drawGestures(view, matrix);
         drawPointers(view, matrix);
         drawOverlays(view, matrix);
         drawWrist(matrix);
@@ -803,6 +879,7 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
         probe.read(eyes, eyeMatrices[0]);
         prepareOverlays();
         prepareTiles();
+        prepareGestures();
         rideWrist();
         for (int view = 0; view < views.count(); view++)
         {
@@ -893,6 +970,9 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
             beams = new Beams();
             markers = new Markers();
             layers = new Layers(client, config, configManager, keys, headset, pointer);
+            gestures = new GestureSession(config, gestureStore, keys);
+            gestures.setActions(gestureActions);
+            layers.gestures(gestures, this::rawHead);
             recording = new Recording(config, layers, placement, times, streamWindow);
             views = new SceneViews(eyes, eyeMatrices, placement, recording);
             roofs = new Roofs(client, config, renderer);
@@ -1229,6 +1309,10 @@ public final class VrCallbacks implements DrawCallbacks, AutoCloseable
         catch (RuntimeException e)
         {
             Logger.error(e, "[VitaVR] Ending the last headset frame failed");
+        }
+        if (gestures != null)
+        {
+            gestures.close();
         }
         keys.releaseAll();
         if (layers != null)

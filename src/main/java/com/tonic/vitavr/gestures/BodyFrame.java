@@ -11,7 +11,7 @@ public final class BodyFrame
     /** How far the frame's origin sits below the head, in metres. */
     public static final double NECK = 0.12;
 
-    private final double easeSeconds;
+    private double easeSeconds;
     private double x;
     private double y;
     private double z;
@@ -24,6 +24,14 @@ public final class BodyFrame
     public BodyFrame(double easeSeconds)
     {
         this.easeSeconds = Math.max(0, easeSeconds);
+    }
+
+    /**
+     * @param seconds How long the frame takes to follow most of a turn of the head from now on.
+     */
+    public void ease(double seconds)
+    {
+        easeSeconds = Math.max(0, seconds);
     }
 
     /**

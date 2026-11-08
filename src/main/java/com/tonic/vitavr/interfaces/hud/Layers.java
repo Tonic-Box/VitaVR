@@ -1,6 +1,8 @@
 package com.tonic.vitavr.interfaces.hud;
 
 import com.tonic.vitavr.VitaVRConfig;
+import com.tonic.vitavr.gestures.vr.GestureSession;
+import com.tonic.vitavr.gestures.vr.GestureToast;
 import com.tonic.vitavr.headset.Headset;
 import com.tonic.vitavr.headset.input.Controllers;
 import com.tonic.vitavr.headset.layers.FloatingLayer;
@@ -40,9 +42,10 @@ import java.util.Set;
  */
 public final class Layers implements AutoCloseable
 {
-    /** The canvas width the chat and inventory side widths are measured against. */
+    /** The settings that change nothing about the interfaces' shape. */
     private static final Set<String> KEEPS_SHAPE = Set.of(VitaVRConfig.SETTINGS_TAB, VitaVRConfig.TABLE_TILT, VitaVRConfig.RECORD_HIDE_CHAT, VitaVRConfig.STREAM_WINDOW,
             VitaVRConfig.ARM_LEFT, VitaVRConfig.ARM_RIGHT, VitaVRConfig.BODY_EASE, VitaVRConfig.GESTURE_PROFILE);
+    /** The canvas width the chat and inventory side widths are measured against. */
     private static final int HUD_CANVAS_WIDTH = 1760;
     private static final int CHAT_SIDE_PIXELS = 520;
     private static final int INVENTORY_SIDE_PIXELS = 260;
@@ -57,6 +60,7 @@ public final class Layers implements AutoCloseable
     private static final double LABEL_RIGHT = -14;
     private static final double LABEL_BELOW = -16;
     private static final double LABEL_ENLARGED = 1.8;
+    private static final double GESTURE_LABEL_METRES_PER_PIXEL = 0.0006;
     private static final double SETTINGS_METRES = 0.85;
     private static final double SETTINGS_BELOW_EYES = 0.12;
     private static final double KEYBOARD_METRES = 0.6;
@@ -82,6 +86,11 @@ public final class Layers implements AutoCloseable
     private final FloatingLayer menuLayer;
     @Getter
     private final FloatingLayer labelLayer;
+    private final FloatingLayer gestureLayer;
+    private final GestureToast gestureToast = new GestureToast(LABEL_WIDTH, LABEL_HEIGHT);
+    private final Billboard gestureBoard = new Billboard();
+    private GestureSession gestures;
+    private int gestureToastShown = -1;
     @Getter
     private final RoomPanel settingsPanel;
     @Getter
@@ -118,10 +127,45 @@ public final class Layers implements AutoCloseable
         this.pointer = pointer;
         menuLayer = new FloatingLayer(headset, WorldMenu.WIDTH, WorldMenu.HEIGHT);
         labelLayer = new FloatingLayer(headset, LABEL_WIDTH, LABEL_HEIGHT);
+        gestureLayer = new FloatingLayer(headset, LABEL_WIDTH, LABEL_HEIGHT);
         settingsPanel = new RoomPanel(headset, new SettingsPanel(config, configManager), SETTINGS_METRES, SETTINGS_BELOW_EYES);
         keyboardPanel = new RoomPanel(headset, new KeyboardPanel(keys), KEYBOARD_METRES, KEYBOARD_BELOW_EYES);
         ownPanels = Arrays.asList(settingsPanel, keyboardPanel);
         wristPicture = new AtlasQuad(WristPicture.WIDTH, WristPicture.HEIGHT);
+    }
+
+    /**
+     * Gives the settings panel's Gestures tab the session's gestures, and shows what comes of each gesture by the hand.
+     *
+     * @param session The session's gestures.
+     * @param head    Gives the head pose in the room, for opening the keyboard.
+     */
+    public void gestures(GestureSession session, java.util.function.Supplier<Pose> head)
+    {
+        gestures = session;
+        ((SettingsPanel) settingsPanel.getPanel()).gestures(session, () ->
+        {
+            if (!keyboardPanel.isShown())
+            {
+                keyboardPanel.open(head.get(), HUD_PIXEL_RADIANS * config.hudSizePercent() / 100.0);
+            }
+        }, keyboardPanel::hide);
+    }
+
+    /**
+     * @return Whether gestures should wait: a panel or the keyboard is open, or the game wants typing.
+     */
+    public boolean pausesGestures()
+    {
+        return settingsPanel.isShown() || keyboardPanel.isShown() || typingWanted;
+    }
+
+    /**
+     * @return Whether the settings panel shows its Gestures tab.
+     */
+    public boolean showsGestures()
+    {
+        return settingsPanel.isShown() && ((SettingsPanel) settingsPanel.getPanel()).onGestures();
     }
 
     /**
@@ -165,6 +209,10 @@ public final class Layers implements AutoCloseable
         {
             keyboardOpenedForTyping = false;
             toggle(keyboardPanel, head, pixelAtOneMetre);
+            if (!keyboardPanel.isShown() && gestures != null)
+            {
+                gestures.finishRename();
+            }
         }
         else if (typingWanted && !wasWanted && !keyboardPanel.isShown())
         {
@@ -243,7 +291,9 @@ public final class Layers implements AutoCloseable
         }
 
         showLabel(placement, pointerHit, pointerMet, head);
+        showGestureToast(head);
         paintWrist(wrist);
+        ((SettingsPanel) settingsPanel.getPanel()).followGestures();
         settingsPanel.refresh();
         keyboardPanel.refresh();
 
@@ -349,6 +399,27 @@ public final class Layers implements AutoCloseable
     }
 
     /**
+     * Stands what came of the last gesture by the hand that made it while it is shown.
+     */
+    private void showGestureToast(Pose head)
+    {
+        String text = gestures == null ? "" : gestures.toastText();
+        if (text.isEmpty())
+        {
+            gestureLayer.clear();
+            return;
+        }
+        double[] at = gestures.toastAt();
+        gestureBoard.stand(at[0], at[1], at[2], head, LABEL_WIDTH, LABEL_HEIGHT, GESTURE_LABEL_METRES_PER_PIXEL, LABEL_WIDTH / 2.0, LABEL_HEIGHT);
+        gestureLayer.place(gestureBoard);
+        if (gestureToastShown != gestures.toastVersion() || gestureLayer.isCleared())
+        {
+            gestureToastShown = gestures.toastVersion();
+            gestureLayer.upload(gestureToast.paint(text, gestures.toastDone()));
+        }
+    }
+
+    /**
      * Repaints the wrist picture from the interfaces while it is in view.
      */
     private void paintWrist(WristDisplay wrist)
@@ -391,7 +462,7 @@ public final class Layers implements AutoCloseable
      */
     public int count()
     {
-        return 4 + (panel == null ? 0 : panel.layers().length);
+        return 5 + (panel == null ? 0 : panel.layers().length);
     }
 
     /**
@@ -410,6 +481,7 @@ public final class Layers implements AutoCloseable
         }
         layers.put(menuLayer.address());
         layers.put(labelLayer.address());
+        layers.put(gestureLayer.address());
         layers.put(settingsPanel.address());
         layers.put(keyboardPanel.address());
     }
@@ -427,6 +499,7 @@ public final class Layers implements AutoCloseable
         closed = true;
         menuLayer.close();
         labelLayer.close();
+        gestureLayer.close();
         settingsPanel.close();
         keyboardPanel.close();
         wristPicture.close();

@@ -2,6 +2,7 @@ package com.tonic.vitavr;
 
 import com.tonic.Logger;
 import com.tonic.services.WorldOverlays;
+import com.tonic.vitavr.gestures.store.GestureStore;
 import com.tonic.vitavr.render.VrCallbacks;
 import com.tonic.vitavr.render.scene.SceneRenderer;
 import com.tonic.vitavr.render.scene.gpu.GpuScene;
@@ -18,6 +19,7 @@ import net.runelite.api.Hitsplat;
 import net.runelite.api.Renderable;
 import net.runelite.api.MenuAction;
 import net.runelite.api.hooks.DrawCallbacks;
+import net.runelite.client.RuneLite;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.callback.RenderCallback;
 import net.runelite.client.callback.RenderCallbackManager;
@@ -95,6 +97,20 @@ public class VrSession
     private HdScene hdScene;
     private final Map<String, String> desktopSettings = new LinkedHashMap<>();
     private volatile VrCallbacks callbacks;
+    private GestureStore gestureStore;
+
+    /**
+     * @return The gestures, read from ~/.runelite/vitavr/gestures on first use.
+     */
+    public synchronized GestureStore gestures()
+    {
+        if (gestureStore == null)
+        {
+            gestureStore = new GestureStore(RuneLite.RUNELITE_DIR.toPath().resolve("vitavr").resolve("gestures"), config.gestureProfile(), config::gestureProfile);
+            gestureStore.load();
+        }
+        return gestureStore;
+    }
 
     /**
      * Starts VR. Must be called on the Swing thread.
@@ -208,7 +224,7 @@ public class VrSession
                 return;
             }
         }
-        callbacks = new VrCallbacks(renderer, client, config, configManager, streamWindow, this::ended);
+        callbacks = new VrCallbacks(renderer, client, config, configManager, streamWindow, gestures(), null, this::ended);
         client.setDrawCallbacks(callbacks);
         callbacks.applyFlags();
         WorldOverlays.setHidden(true);

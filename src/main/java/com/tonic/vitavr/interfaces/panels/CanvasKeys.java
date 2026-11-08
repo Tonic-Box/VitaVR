@@ -13,8 +13,25 @@ import javax.swing.SwingUtilities;
  */
 public final class CanvasKeys
 {
+    /**
+     * Takes the keys instead of the game while set, as for naming a gesture.
+     */
+    public interface Capture
+    {
+        /**
+         * @param character A character typed.
+         */
+        void typed(char character);
+
+        /**
+         * @param code A key pressed that types nothing, such as enter or backspace.
+         */
+        void pressed(int code);
+    }
+
     private final Client client;
     private final Set<Integer> down = new HashSet<>();
+    private volatile Capture capture;
 
     /**
      * @param client The client.
@@ -31,6 +48,12 @@ public final class CanvasKeys
      */
     public void type(char character)
     {
+        Capture taking = capture;
+        if (taking != null)
+        {
+            taking.typed(character);
+            return;
+        }
         int code = KeyEvent.getExtendedKeyCodeForChar(character);
         send(KeyEvent.KEY_PRESSED, code, character);
         send(KeyEvent.KEY_TYPED, KeyEvent.VK_UNDEFINED, character);
@@ -44,6 +67,12 @@ public final class CanvasKeys
      */
     public void press(int code)
     {
+        Capture taking = capture;
+        if (taking != null)
+        {
+            taking.pressed(code);
+            return;
+        }
         down.add(code);
         send(KeyEvent.KEY_PRESSED, code, KeyEvent.CHAR_UNDEFINED);
     }
@@ -59,6 +88,22 @@ public final class CanvasKeys
         {
             send(KeyEvent.KEY_RELEASED, code, KeyEvent.CHAR_UNDEFINED);
         }
+    }
+
+    /**
+     * @param taking What takes the keys from now on instead of the game, or null to give them back.
+     */
+    public void capture(Capture taking)
+    {
+        capture = taking;
+    }
+
+    /**
+     * @return What takes the keys, or null while they go to the game.
+     */
+    public Capture capturing()
+    {
+        return capture;
     }
 
     /**

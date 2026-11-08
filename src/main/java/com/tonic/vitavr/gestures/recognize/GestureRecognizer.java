@@ -29,6 +29,8 @@ public final class GestureRecognizer
         public final double[] point = new double[3];
         /** The hand's turn rate in the body frame. */
         public final double[] spin = new double[3];
+        /** The hand's orientation in the body frame, x, y, z, w. */
+        public final double[] orientation = {0, 0, 0, 1};
         public boolean tracked;
         public boolean armed;
         public boolean gripWentDown;

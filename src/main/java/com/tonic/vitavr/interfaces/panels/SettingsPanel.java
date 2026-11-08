@@ -3,6 +3,7 @@ package com.tonic.vitavr.interfaces.panels;
 import com.tonic.vitavr.VitaVRConfig;
 import com.tonic.vitavr.config.TurnMode;
 import com.tonic.vitavr.config.ViewMode;
+import com.tonic.vitavr.gestures.vr.GestureSession;
 import com.tonic.vitavr.interfaces.hud.HudLayout;
 import net.runelite.client.config.ConfigManager;
 
@@ -13,6 +14,7 @@ import java.awt.Graphics2D;
 import java.awt.Rectangle;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
 import java.util.function.IntConsumer;
 import java.util.function.Supplier;
 
@@ -58,7 +60,8 @@ public final class SettingsPanel extends AbstractPanel
         VIEW("View"),
         BODY("Body"),
         INTERFACES("Interfaces"),
-        COMFORT("Comfort");
+        COMFORT("Comfort"),
+        GESTURES("Gestures");
 
         private final String label;
 
@@ -97,6 +100,8 @@ public final class SettingsPanel extends AbstractPanel
     private final VitaVRConfig config;
     private final ConfigManager configManager;
     private final List<Row> rows;
+    private final GesturesPage gestures;
+    private Object gesturesShown;
     private Tab tab;
     private boolean closeAsked;
 
@@ -111,6 +116,7 @@ public final class SettingsPanel extends AbstractPanel
         this.config = config;
         this.configManager = configManager;
         this.tab = tabNamed(config.settingsTab());
+        this.gestures = new GesturesPage(config, configManager, PAD, ROWS_TOP, WIDTH - 2 * PAD, ROW);
         this.rows = Arrays.asList(
                 new Row(Tab.VIEW, "View", () -> config.viewMode().toString(),
                         direction -> set(VitaVRConfig.VIEW_MODE, config.viewMode() == ViewMode.TABLETOP ? ViewMode.FIRST_PERSON : ViewMode.TABLETOP), false),
@@ -243,6 +249,44 @@ public final class SettingsPanel extends AbstractPanel
     }
 
     /**
+     * Gives the Gestures tab the session's gestures.
+     *
+     * @param session       The session's gestures.
+     * @param openKeyboard  Opens the keyboard, for naming a gesture.
+     * @param closeKeyboard Puts the keyboard away once named.
+     */
+    public void gestures(GestureSession session, Runnable openKeyboard, Runnable closeKeyboard)
+    {
+        gestures.session(session, openKeyboard, closeKeyboard);
+        changed();
+    }
+
+    /**
+     * Marks the panel for repainting when the Gestures tab is shown and what it shows has moved on, as while recording.
+     */
+    public void followGestures()
+    {
+        if (tab != Tab.GESTURES)
+        {
+            return;
+        }
+        Object now = gestures.state();
+        if (!Objects.equals(now, gesturesShown))
+        {
+            gesturesShown = now;
+            changed();
+        }
+    }
+
+    /**
+     * @return Whether the Gestures tab is the one shown.
+     */
+    public boolean onGestures()
+    {
+        return tab == Tab.GESTURES;
+    }
+
+    /**
      * Marks the panel for repainting after a setting changed elsewhere.
      */
     public void settingsChanged()
@@ -279,12 +323,16 @@ public final class SettingsPanel extends AbstractPanel
     @Override
     protected int targets()
     {
-        return doneTarget() + 1;
+        return doneTarget() + 1 + (tab == Tab.GESTURES ? gestures.targets() : 0);
     }
 
     @Override
     protected Rectangle bounds(int target)
     {
+        if (target > doneTarget())
+        {
+            return tab == Tab.GESTURES ? gestures.bounds(target - doneTarget() - 1) : null;
+        }
         boolean row = target != doneTarget() && target >= tabs();
         if (!row)
         {
@@ -321,6 +369,11 @@ public final class SettingsPanel extends AbstractPanel
     @Override
     protected void pressed(int target)
     {
+        if (target > doneTarget())
+        {
+            gestures.pressed(target - doneTarget() - 1);
+            return;
+        }
         if (target == doneTarget())
         {
             closeAsked = true;
@@ -371,6 +424,10 @@ public final class SettingsPanel extends AbstractPanel
             {
                 paintRow(g, index, rows.get(index));
             }
+        }
+        if (tab == Tab.GESTURES)
+        {
+            gestures.paint(g, hovered() - doneTarget() - 1, TEXT, NOTE, BUTTON, LIT, CHOSEN, FONT);
         }
         Rectangle done = rectangle(doneTarget());
         button(g, done, hovered() == doneTarget());
