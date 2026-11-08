@@ -1,5 +1,7 @@
 package com.tonic.vitavr.ui.filechooser;
 
+import com.tonic.vitavr.ui.Style;
+
 import javax.swing.BorderFactory;
 import javax.swing.Box;
 import javax.swing.BoxLayout;
@@ -46,30 +48,30 @@ final class QuickAccessPanel extends JPanel implements QuickAccessStore.Listener
         super(new BorderLayout());
         this.navigator = navigator;
         this.store = store;
-        setBackground(ChooserStyle.BG_SECONDARY);
-        setPreferredSize(new Dimension(ChooserStyle.px(170), 0));
-        setBorder(BorderFactory.createMatteBorder(0, 0, 0, 1, ChooserStyle.BORDER));
+        setBackground(Style.BG_SECONDARY);
+        setPreferredSize(new Dimension(Style.px(170), 0));
+        setBorder(BorderFactory.createMatteBorder(0, 0, 0, 1, Style.BORDER));
 
         JPanel content = new JPanel();
         content.setLayout(new BoxLayout(content, BoxLayout.Y_AXIS));
-        content.setBackground(ChooserStyle.BG_SECONDARY);
+        content.setBackground(Style.BG_SECONDARY);
 
         pinnedHeader = header("Pinned");
         content.add(pinnedHeader);
         pinnedList = list(pinnedModel);
         content.add(pinnedList);
-        content.add(Box.createVerticalStrut(ChooserStyle.px(12)));
+        content.add(Box.createVerticalStrut(Style.px(12)));
 
         content.add(header("Quick Access"));
         quickAccessList = list(quickAccessModel);
         content.add(quickAccessList);
-        content.add(Box.createVerticalStrut(ChooserStyle.px(12)));
+        content.add(Box.createVerticalStrut(Style.px(12)));
 
         recentHeader = header("Recent");
         content.add(recentHeader);
         recentList = list(recentModel);
         content.add(recentList);
-        content.add(Box.createVerticalStrut(ChooserStyle.px(12)));
+        content.add(Box.createVerticalStrut(Style.px(12)));
 
         content.add(header("This PC"));
         drivesList = list(drivesModel);
@@ -79,7 +81,7 @@ final class QuickAccessPanel extends JPanel implements QuickAccessStore.Listener
         JScrollPane scroll = new JScrollPane(content);
         scroll.setBorder(null);
         scroll.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
-        scroll.getViewport().setBackground(ChooserStyle.BG_SECONDARY);
+        scroll.getViewport().setBackground(Style.BG_SECONDARY);
         add(scroll, BorderLayout.CENTER);
 
         populatePinned();
@@ -131,9 +133,9 @@ final class QuickAccessPanel extends JPanel implements QuickAccessStore.Listener
     private static JLabel header(String title)
     {
         JLabel label = new JLabel(title);
-        label.setForeground(ChooserStyle.TEXT_MUTED);
-        label.setFont(ChooserStyle.boldFont(11));
-        label.setBorder(BorderFactory.createEmptyBorder(ChooserStyle.px(8), ChooserStyle.px(12), ChooserStyle.px(4), ChooserStyle.px(8)));
+        label.setForeground(Style.TEXT_MUTED);
+        label.setFont(Style.boldFont(11));
+        label.setBorder(BorderFactory.createEmptyBorder(Style.px(8), Style.px(12), Style.px(4), Style.px(8)));
         label.setAlignmentX(Component.LEFT_ALIGNMENT);
         return label;
     }
@@ -142,10 +144,10 @@ final class QuickAccessPanel extends JPanel implements QuickAccessStore.Listener
     {
         JList<Item> list = new JList<>(model);
         list.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-        list.setBackground(ChooserStyle.BG_SECONDARY);
-        list.setForeground(ChooserStyle.TEXT);
-        list.setFont(ChooserStyle.font(ChooserStyle.FONT_SIZE));
-        list.setFixedCellHeight(ChooserStyle.ROW_HEIGHT + ChooserStyle.px(2));
+        list.setBackground(Style.BG_SECONDARY);
+        list.setForeground(Style.TEXT);
+        list.setFont(Style.font(Style.FONT_SIZE));
+        list.setFixedCellHeight(Style.ROW_HEIGHT + Style.px(2));
         list.setCellRenderer(new ItemRenderer());
         list.setAlignmentX(Component.LEFT_ALIGNMENT);
         list.addMouseListener(new MouseAdapter()
@@ -192,28 +194,28 @@ final class QuickAccessPanel extends JPanel implements QuickAccessStore.Listener
         }
         list.setSelectedIndex(index);
         Item item = model.getElementAt(index);
-        JPopupMenu menu = ChooserStyle.menu();
+        JPopupMenu menu = Style.menu();
         if (item.kind == Kind.PINNED)
         {
-            ChooserStyle.menuItem(menu, "Unpin", () -> store.unpin(item.file));
+            Style.menuItem(menu, "Unpin", () -> store.unpin(item.file));
             menu.addSeparator();
-            ChooserStyle.menuItem(menu, "Move Up", () -> store.movePinnedUp(item.file));
-            ChooserStyle.menuItem(menu, "Move Down", () -> store.movePinnedDown(item.file));
+            Style.menuItem(menu, "Move Up", () -> store.movePinnedUp(item.file));
+            Style.menuItem(menu, "Move Down", () -> store.movePinnedDown(item.file));
         }
         else if (item.kind == Kind.RECENT)
         {
-            ChooserStyle.menuItem(menu, "Pin to Quick Access", () -> store.pin(item.file));
-            ChooserStyle.menuItem(menu, "Remove", () -> store.removeRecent(item.file));
+            Style.menuItem(menu, "Pin to Quick Access", () -> store.pin(item.file));
+            Style.menuItem(menu, "Remove", () -> store.removeRecent(item.file));
             menu.addSeparator();
-            ChooserStyle.menuItem(menu, "Clear All Recent", store::clearRecent);
+            Style.menuItem(menu, "Clear All Recent", store::clearRecent);
         }
         else if (store.isPinned(item.file))
         {
-            ChooserStyle.menuItem(menu, "Unpin", () -> store.unpin(item.file));
+            Style.menuItem(menu, "Unpin", () -> store.unpin(item.file));
         }
         else
         {
-            ChooserStyle.menuItem(menu, "Pin to Quick Access", () -> store.pin(item.file));
+            Style.menuItem(menu, "Pin to Quick Access", () -> store.pin(item.file));
         }
         menu.show(list, e.getX(), e.getY());
     }
@@ -303,9 +305,9 @@ final class QuickAccessPanel extends JPanel implements QuickAccessStore.Listener
         ItemRenderer()
         {
             panel.setOpaque(true);
-            panel.setBorder(BorderFactory.createEmptyBorder(ChooserStyle.px(3), ChooserStyle.px(12), ChooserStyle.px(3), ChooserStyle.px(8)));
-            text.setFont(ChooserStyle.font(ChooserStyle.FONT_SIZE));
-            pin.setFont(ChooserStyle.font(10));
+            panel.setBorder(BorderFactory.createEmptyBorder(Style.px(3), Style.px(12), Style.px(3), Style.px(8)));
+            text.setFont(Style.font(Style.FONT_SIZE));
+            pin.setFont(Style.font(10));
             JPanel left = new JPanel(new BorderLayout(4, 0));
             left.setOpaque(false);
             left.add(icon, BorderLayout.WEST);
@@ -318,9 +320,9 @@ final class QuickAccessPanel extends JPanel implements QuickAccessStore.Listener
         public Component getListCellRendererComponent(JList<? extends Item> list, Item value, int index,
                                                       boolean isSelected, boolean cellHasFocus)
         {
-            panel.setBackground(isSelected ? ChooserStyle.SELECTION : ChooserStyle.BG_SECONDARY);
-            text.setForeground(ChooserStyle.TEXT);
-            pin.setForeground(ChooserStyle.TEXT_MUTED);
+            panel.setBackground(isSelected ? Style.SELECTION : Style.BG_SECONDARY);
+            text.setForeground(Style.TEXT);
+            pin.setForeground(Style.TEXT_MUTED);
             text.setText(value.name);
             icon.setIcon(FileSystemWorker.systemIcon(value.file));
             pin.setText(value.kind == Kind.PINNED ? "⌂" : "");

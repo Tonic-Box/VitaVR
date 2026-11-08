@@ -1,5 +1,7 @@
 package com.tonic.vitavr.ui.filechooser;
 
+import com.tonic.vitavr.ui.Style;
+
 import javax.swing.AbstractAction;
 import javax.swing.BorderFactory;
 import javax.swing.JLabel;
@@ -53,8 +55,8 @@ final class FileChooserPanel extends JPanel
     {
         super(new BorderLayout());
         this.store = store;
-        setBackground(ChooserStyle.BG_PRIMARY);
-        setPreferredSize(new Dimension(ChooserStyle.px(800), ChooserStyle.px(500)));
+        setBackground(Style.BG_PRIMARY);
+        setPreferredSize(new Dimension(Style.px(800), Style.px(500)));
 
         pathBar = new PathBar(this::navigateTo);
         quickAccessPanel = new QuickAccessPanel(store, this::navigateTo);
@@ -93,10 +95,10 @@ final class FileChooserPanel extends JPanel
 
         add(pathBar, BorderLayout.NORTH);
         JSplitPane split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, quickAccessPanel, fileListPanel);
-        split.setDividerLocation(ChooserStyle.px(180));
-        split.setDividerSize(ChooserStyle.px(4));
+        split.setDividerLocation(Style.px(180));
+        split.setDividerSize(Style.px(4));
         split.setBorder(null);
-        split.setBackground(ChooserStyle.BORDER);
+        split.setBackground(Style.BORDER);
         add(split, BorderLayout.CENTER);
         add(bottomPanel(), BorderLayout.SOUTH);
         installShortcuts();
@@ -105,22 +107,22 @@ final class FileChooserPanel extends JPanel
     private JPanel bottomPanel()
     {
         JPanel panel = new JPanel(new BorderLayout(8, 8));
-        panel.setBackground(ChooserStyle.BG_SECONDARY);
+        panel.setBackground(Style.BG_SECONDARY);
         panel.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createMatteBorder(1, 0, 0, 0, ChooserStyle.BORDER),
-                BorderFactory.createEmptyBorder(ChooserStyle.px(12), ChooserStyle.px(12), ChooserStyle.px(12), ChooserStyle.px(12))));
+                BorderFactory.createMatteBorder(1, 0, 0, 0, Style.BORDER),
+                BorderFactory.createEmptyBorder(Style.px(12), Style.px(12), Style.px(12), Style.px(12))));
 
         JPanel nameRow = new JPanel(new BorderLayout(8, 0));
         nameRow.setOpaque(false);
         JLabel nameLabel = new JLabel("File name:");
-        nameLabel.setForeground(ChooserStyle.TEXT);
-        nameLabel.setFont(ChooserStyle.font(ChooserStyle.FONT_SIZE));
-        nameLabel.setPreferredSize(new Dimension(ChooserStyle.px(70), ChooserStyle.px(24)));
-        fileNameField.setFont(ChooserStyle.font(ChooserStyle.FONT_SIZE));
-        fileNameField.setBackground(ChooserStyle.BG_TERTIARY);
-        fileNameField.setForeground(ChooserStyle.TEXT);
-        fileNameField.setCaretColor(ChooserStyle.TEXT);
-        fileNameField.setBorder(ChooserStyle.fieldBorder(ChooserStyle.BORDER));
+        nameLabel.setForeground(Style.TEXT);
+        nameLabel.setFont(Style.font(Style.FONT_SIZE));
+        nameLabel.setPreferredSize(new Dimension(Style.px(70), Style.px(24)));
+        fileNameField.setFont(Style.font(Style.FONT_SIZE));
+        fileNameField.setBackground(Style.BG_TERTIARY);
+        fileNameField.setForeground(Style.TEXT);
+        fileNameField.setCaretColor(Style.TEXT);
+        fileNameField.setBorder(Style.fieldBorder(Style.BORDER));
         fileNameField.getDocument().addDocumentListener(new DocumentListener()
         {
             @Override

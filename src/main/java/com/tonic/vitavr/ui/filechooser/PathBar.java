@@ -1,5 +1,7 @@
 package com.tonic.vitavr.ui.filechooser;
 
+import com.tonic.vitavr.ui.Style;
+
 import javax.swing.BorderFactory;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
@@ -52,11 +54,11 @@ final class PathBar extends JPanel
     {
         this.navigator = navigator;
         setLayout(new BorderLayout(4, 0));
-        setBackground(ChooserStyle.BG_SECONDARY);
+        setBackground(Style.BG_SECONDARY);
         setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createMatteBorder(0, 0, 1, 0, ChooserStyle.BORDER),
-                BorderFactory.createEmptyBorder(ChooserStyle.px(4), ChooserStyle.px(8), ChooserStyle.px(4), ChooserStyle.px(8))));
-        setPreferredSize(new Dimension(0, ChooserStyle.px(36)));
+                BorderFactory.createMatteBorder(0, 0, 1, 0, Style.BORDER),
+                BorderFactory.createEmptyBorder(Style.px(4), Style.px(8), Style.px(4), Style.px(8))));
+        setPreferredSize(new Dimension(0, Style.px(36)));
 
         JPanel navButtons = new JPanel(new FlowLayout(FlowLayout.LEFT, 2, 0));
         navButtons.setOpaque(false);
@@ -88,13 +90,13 @@ final class PathBar extends JPanel
         });
 
         pathField = new JTextField();
-        pathField.setFont(ChooserStyle.font(ChooserStyle.FONT_SIZE));
-        pathField.setBackground(ChooserStyle.BG_TERTIARY);
-        pathField.setForeground(ChooserStyle.TEXT);
-        pathField.setCaretColor(ChooserStyle.TEXT);
+        pathField.setFont(Style.font(Style.FONT_SIZE));
+        pathField.setBackground(Style.BG_TERTIARY);
+        pathField.setForeground(Style.TEXT);
+        pathField.setCaretColor(Style.TEXT);
         pathField.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(ChooserStyle.ACCENT),
-                BorderFactory.createEmptyBorder(ChooserStyle.px(2), ChooserStyle.px(6), ChooserStyle.px(2), ChooserStyle.px(6))));
+                BorderFactory.createLineBorder(Style.ACCENT),
+                BorderFactory.createEmptyBorder(Style.px(2), Style.px(6), Style.px(2), Style.px(6))));
         pathField.addKeyListener(new KeyAdapter()
         {
             @Override
@@ -171,22 +173,22 @@ final class PathBar extends JPanel
     private JLabel crumb(File segment)
     {
         JLabel label = new JLabel(nameOf(segment));
-        label.setFont(ChooserStyle.font(ChooserStyle.FONT_SIZE));
-        label.setForeground(ChooserStyle.TEXT);
-        label.setBorder(BorderFactory.createEmptyBorder(ChooserStyle.px(2), ChooserStyle.px(6), ChooserStyle.px(2), ChooserStyle.px(6)));
+        label.setFont(Style.font(Style.FONT_SIZE));
+        label.setForeground(Style.TEXT);
+        label.setBorder(BorderFactory.createEmptyBorder(Style.px(2), Style.px(6), Style.px(2), Style.px(6)));
         label.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         label.addMouseListener(new MouseAdapter()
         {
             @Override
             public void mouseEntered(MouseEvent e)
             {
-                label.setForeground(ChooserStyle.ACCENT_BRIGHT);
+                label.setForeground(Style.ACCENT_BRIGHT);
             }
 
             @Override
             public void mouseExited(MouseEvent e)
             {
-                label.setForeground(ChooserStyle.TEXT);
+                label.setForeground(Style.TEXT);
             }
 
             @Override
@@ -201,9 +203,9 @@ final class PathBar extends JPanel
     private static JLabel separator()
     {
         JLabel sep = new JLabel(">");
-        sep.setFont(ChooserStyle.font(10));
-        sep.setForeground(ChooserStyle.TEXT_MUTED);
-        sep.setBorder(BorderFactory.createEmptyBorder(ChooserStyle.px(2), ChooserStyle.px(2), ChooserStyle.px(2), ChooserStyle.px(2)));
+        sep.setFont(Style.font(10));
+        sep.setForeground(Style.TEXT_MUTED);
+        sep.setBorder(BorderFactory.createEmptyBorder(Style.px(2), Style.px(2), Style.px(2), Style.px(2)));
         return sep;
     }
 
@@ -221,9 +223,9 @@ final class PathBar extends JPanel
         BreadcrumbTrail()
         {
             super(null);
-            ellipsis.setFont(ChooserStyle.font(ChooserStyle.FONT_SIZE));
-            ellipsis.setForeground(ChooserStyle.TEXT);
-            ellipsis.setBorder(BorderFactory.createEmptyBorder(ChooserStyle.px(2), ChooserStyle.px(6), ChooserStyle.px(2), ChooserStyle.px(6)));
+            ellipsis.setFont(Style.font(Style.FONT_SIZE));
+            ellipsis.setForeground(Style.TEXT);
+            ellipsis.setBorder(BorderFactory.createEmptyBorder(Style.px(2), Style.px(6), Style.px(2), Style.px(6)));
             ellipsis.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
             ellipsis.setToolTipText("Folders above");
             ellipsis.addMouseListener(new MouseAdapter()
@@ -264,11 +266,11 @@ final class PathBar extends JPanel
 
         private void showHidden(MouseEvent e)
         {
-            JPopupMenu menu = ChooserStyle.menu();
+            JPopupMenu menu = Style.menu();
             for (int i = 0; i < hiddenSegments; i++)
             {
                 File segment = segments.get(i);
-                ChooserStyle.menuItem(menu, nameOf(segment), () -> navigator.accept(segment));
+                Style.menuItem(menu, nameOf(segment), () -> navigator.accept(segment));
             }
             if (menu.getComponentCount() > 0)
             {
@@ -385,8 +387,8 @@ final class PathBar extends JPanel
 
     private void flashError()
     {
-        Color original = ChooserStyle.BG_TERTIARY;
-        Color error = ChooserStyle.ERROR;
+        Color original = Style.BG_TERTIARY;
+        Color error = Style.ERROR;
         pathField.setBackground(new Color(error.getRed() / 3, error.getGreen() / 6, error.getBlue() / 6));
         Timer timer = new Timer(500, e -> pathField.setBackground(original));
         timer.setRepeats(false);

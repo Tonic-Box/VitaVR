@@ -44,6 +44,12 @@ public class PrayerStep extends AbstractStep
     @Override
     public String describe()
     {
-        return "Prayer " + mode.toString().toLowerCase() + ": " + String.join(", ", prayers);
+        List<String> named = new ArrayList<>();
+        for (String prayer : prayers)
+        {
+            String lower = prayer.toLowerCase().replace('_', ' ');
+            named.add(lower.isEmpty() ? lower : Character.toUpperCase(lower.charAt(0)) + lower.substring(1));
+        }
+        return "Prayer " + mode.toString().toLowerCase() + ": " + (named.isEmpty() ? "none chosen" : String.join(", ", named));
     }
 }

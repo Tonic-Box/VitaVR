@@ -5,9 +5,16 @@ import com.tonic.model.ui.components.FancyButton;
 import com.tonic.model.ui.components.FancyCard;
 import com.tonic.vitavr.VitaVRConfig;
 import com.tonic.vitavr.VrSession;
+import com.tonic.vitavr.gestures.actions.VitaGame;
+import com.tonic.vitavr.gestures.model.Profile;
+import com.tonic.vitavr.gestures.store.GestureStore;
+import com.tonic.vitavr.gestures.store.Gestures;
+import com.tonic.vitavr.ui.gestures.GestureEditorWindow;
 import net.runelite.api.Client;
 import net.runelite.api.GameState;
+import net.runelite.client.callback.ClientThread;
 import net.runelite.client.config.ConfigManager;
+import net.runelite.client.game.ItemManager;
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.PluginPanel;
 
@@ -30,12 +37,19 @@ public class SidePanel extends PluginPanel
     private final JCheckBox hideChatBox;
     private final JCheckBox streamBox;
     private final JLabel statusLabel;
+    private final JComboBox<String> profileBox = new JComboBox<>();
+    private final ClientThread clientThread;
+    private final ItemManager itemManager;
+    private GestureEditorWindow editor;
+    private boolean loadingProfiles;
 
     @Inject
-    public SidePanel(VrSession session, Client client, VitaVRConfig config, ConfigManager configManager)
+    public SidePanel(VrSession session, Client client, VitaVRConfig config, ConfigManager configManager, ClientThread clientThread, ItemManager itemManager)
     {
         this.session = session;
         this.client = client;
+        this.clientThread = clientThread;
+        this.itemManager = itemManager;
 
         setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
         setBackground(ColorScheme.DARK_GRAY_COLOR);
@@ -84,6 +98,29 @@ public class SidePanel extends PluginPanel
         add(hideChatBox, c);
         c.gridy++;
 
+        JLabel profileLabel = new JLabel("Gesture profile");
+        profileLabel.setForeground(Color.LIGHT_GRAY);
+        add(profileLabel, c);
+        c.gridy++;
+        profileBox.setFocusable(false);
+        profileBox.addActionListener(e ->
+        {
+            Object chosen = profileBox.getSelectedItem();
+            GestureStore store = session.gestures();
+            if (!loadingProfiles && chosen != null && !chosen.equals(store.snapshot().getActive()))
+            {
+                store.update(gestures -> gestures.setActive((String) chosen));
+            }
+        });
+        add(profileBox, c);
+        c.gridy++;
+
+        JButton editorButton = new FancyButton("Gesture editor…");
+        editorButton.setFocusable(false);
+        editorButton.addActionListener(e -> openEditor());
+        add(editorButton, c);
+        c.gridy++;
+
         statusLabel = new JLabel(" ", SwingConstants.CENTER);
         statusLabel.setForeground(Color.LIGHT_GRAY);
         add(statusLabel, c);
@@ -93,9 +130,40 @@ public class SidePanel extends PluginPanel
         add(new JPanel(), c);
         refresh(null);
 
+        session.gestures().addListener(() -> SwingUtilities.invokeLater(this::showProfiles));
+        showProfiles();
+
         // The headset can end VR by itself
         session.setOnEnded(this::refresh);
         session.setOnStreamClosed(() -> streamBox.setSelected(false));
+    }
+
+    private void showProfiles()
+    {
+        Gestures gestures = session.gestures().snapshot();
+        loadingProfiles = true;
+        try
+        {
+            profileBox.removeAllItems();
+            for (Profile profile : gestures.getProfiles())
+            {
+                profileBox.addItem(profile.getName());
+            }
+            profileBox.setSelectedItem(gestures.activeProfile() == null ? null : gestures.activeProfile().getName());
+        }
+        finally
+        {
+            loadingProfiles = false;
+        }
+    }
+
+    private void openEditor()
+    {
+        if (editor == null)
+        {
+            editor = GestureEditorWindow.create(session.gestures(), session.gestureRunner(), new VitaGame(client), client, clientThread, itemManager);
+        }
+        editor.open();
     }
 
     private void toggle()

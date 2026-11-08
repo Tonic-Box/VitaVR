@@ -1,5 +1,7 @@
 package com.tonic.vitavr.ui.filechooser;
 
+import com.tonic.vitavr.ui.Style;
+
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
 import java.awt.Color;
@@ -22,27 +24,27 @@ final class ChooserButton extends JButton
     /** An accent-filled button for the dialog's primary action. */
     static ChooserButton primary(String text)
     {
-        ChooserButton button = new ChooserButton(text, ChooserStyle.ACCENT, ChooserStyle.ACCENT_BRIGHT, null);
-        button.setPreferredSize(new Dimension(ChooserStyle.px(90), ChooserStyle.px(28)));
+        ChooserButton button = new ChooserButton(text, Style.ACCENT, Style.ACCENT_BRIGHT, null);
+        button.setPreferredSize(new Dimension(Style.px(90), Style.px(28)));
         return button;
     }
 
     /** A plain outlined button. */
     static ChooserButton plain(String text)
     {
-        ChooserButton button = new ChooserButton(text, ChooserStyle.BG_TERTIARY, ChooserStyle.HOVER, ChooserStyle.BORDER);
-        button.setPreferredSize(new Dimension(ChooserStyle.px(90), ChooserStyle.px(28)));
+        ChooserButton button = new ChooserButton(text, Style.BG_TERTIARY, Style.HOVER, Style.BORDER);
+        button.setPreferredSize(new Dimension(Style.px(90), Style.px(28)));
         return button;
     }
 
     /** A small square navigation button holding one glyph. */
     static ChooserButton nav(String text, String tooltip)
     {
-        ChooserButton button = new ChooserButton(text, ChooserStyle.BG_TERTIARY, ChooserStyle.HOVER, ChooserStyle.BORDER);
+        ChooserButton button = new ChooserButton(text, Style.BG_TERTIARY, Style.HOVER, Style.BORDER);
         button.setToolTipText(tooltip);
-        button.setBorder(BorderFactory.createLineBorder(ChooserStyle.BORDER));
+        button.setBorder(BorderFactory.createLineBorder(Style.BORDER));
         button.setMargin(new java.awt.Insets(0, 0, 0, 0));
-        button.setPreferredSize(new Dimension(ChooserStyle.px(28), ChooserStyle.px(24)));
+        button.setPreferredSize(new Dimension(Style.px(28), Style.px(24)));
         return button;
     }
 
@@ -55,11 +57,11 @@ final class ChooserButton extends JButton
         setFocusPainted(false);
         setOpaque(false);
         setRolloverEnabled(false);
-        setFont(ChooserStyle.font(ChooserStyle.FONT_SIZE));
+        setFont(Style.font(Style.FONT_SIZE));
         setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         setBorder(border == null
-                ? BorderFactory.createEmptyBorder(ChooserStyle.px(4), ChooserStyle.px(12), ChooserStyle.px(4), ChooserStyle.px(12))
-                : BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(border), BorderFactory.createEmptyBorder(ChooserStyle.px(3), ChooserStyle.px(11), ChooserStyle.px(3), ChooserStyle.px(11))));
+                ? BorderFactory.createEmptyBorder(Style.px(4), Style.px(12), Style.px(4), Style.px(12))
+                : BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(border), BorderFactory.createEmptyBorder(Style.px(3), Style.px(11), Style.px(3), Style.px(11))));
         addMouseListener(new MouseAdapter()
         {
             @Override

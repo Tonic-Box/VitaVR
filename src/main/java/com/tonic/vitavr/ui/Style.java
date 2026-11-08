@@ -1,4 +1,4 @@
-package com.tonic.vitavr.ui.filechooser;
+package com.tonic.vitavr.ui;
 
 
 import javax.swing.BorderFactory;
@@ -11,30 +11,30 @@ import java.awt.GraphicsEnvironment;
 import java.awt.Toolkit;
 
 /**
- * The file chooser's palette, fonts, sizes and small widget factories.
- * The client may run with Windows display scaling turned off and its own game font as the default, so the chooser
- * scales its own sizes to the screen and uses the system UI font.
+ * VitaVR's desktop windows' palette, fonts, sizes and small widget factories.
+ * The client may run with Windows display scaling turned off and its own game font as the default, so the windows
+ * scale their own sizes to the screen and use the system UI font.
  */
-final class ChooserStyle
+public final class Style
 {
-    static final Color BG_PRIMARY = new Color(0x2B2B2B);
-    static final Color BG_SECONDARY = new Color(0x333333);
-    static final Color BG_TERTIARY = new Color(0x3A3A3A);
-    static final Color TEXT = new Color(0xE0E0E0);
-    static final Color TEXT_MUTED = new Color(0x9AA0A6);
-    static final Color ACCENT = new Color(0x3A6EA5);
-    static final Color ACCENT_BRIGHT = new Color(0x4A82BD);
-    static final Color SELECTION = new Color(0x3A6EA5);
-    static final Color HOVER = new Color(0x4A4A4A);
-    static final Color BORDER = new Color(0x3C3C3C);
-    static final Color ERROR = new Color(0xA33A3A);
+    public static final Color BG_PRIMARY = new Color(0x2B2B2B);
+    public static final Color BG_SECONDARY = new Color(0x333333);
+    public static final Color BG_TERTIARY = new Color(0x3A3A3A);
+    public static final Color TEXT = new Color(0xE0E0E0);
+    public static final Color TEXT_MUTED = new Color(0x9AA0A6);
+    public static final Color ACCENT = new Color(0x3A6EA5);
+    public static final Color ACCENT_BRIGHT = new Color(0x4A82BD);
+    public static final Color SELECTION = new Color(0x3A6EA5);
+    public static final Color HOVER = new Color(0x4A4A4A);
+    public static final Color BORDER = new Color(0x3C3C3C);
+    public static final Color ERROR = new Color(0xA33A3A);
     /** How much bigger than 96 DPI to draw, beyond whatever scaling Java already applies. */
     private static final double SCALE = scale();
     private static final String FAMILY = family();
-    static final int ROW_HEIGHT = px(24);
-    static final int FONT_SIZE = 12;
+    public static final int ROW_HEIGHT = px(24);
+    public static final int FONT_SIZE = 12;
 
-    private ChooserStyle()
+    private Style()
     {
     }
 
@@ -44,12 +44,12 @@ final class ChooserStyle
      * @param pixels The size at 96 DPI.
      * @return The size on this screen.
      */
-    static int px(int pixels)
+    public static int px(int pixels)
     {
         return (int) Math.round(pixels * SCALE);
     }
 
-    static Font font(int size)
+    public static Font font(int size)
     {
         return new Font(FAMILY, Font.PLAIN, size).deriveFont((float) (size * SCALE));
     }
@@ -80,26 +80,26 @@ final class ChooserStyle
         return Font.SANS_SERIF;
     }
 
-    static Font boldFont(int size)
+    public static Font boldFont(int size)
     {
         return font(size).deriveFont(Font.BOLD);
     }
 
     /** A text field border: a line in the given colour around a little padding. */
-    static Border fieldBorder(Color line)
+    public static Border fieldBorder(Color line)
     {
         return BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(line),
                 BorderFactory.createEmptyBorder(4, 8, 4, 8));
     }
 
-    static JPopupMenu menu()
+    public static JPopupMenu menu()
     {
         JPopupMenu menu = new JPopupMenu();
         menu.setBorder(BorderFactory.createLineBorder(BORDER));
         return menu;
     }
 
-    static void menuItem(JPopupMenu menu, String text, Runnable action)
+    public static void menuItem(JPopupMenu menu, String text, Runnable action)
     {
         JMenuItem item = new JMenuItem(text);
         item.addActionListener(e -> action.run());

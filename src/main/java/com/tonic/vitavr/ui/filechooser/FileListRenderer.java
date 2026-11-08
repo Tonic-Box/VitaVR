@@ -1,5 +1,7 @@
 package com.tonic.vitavr.ui.filechooser;
 
+import com.tonic.vitavr.ui.Style;
+
 import javax.swing.BorderFactory;
 import javax.swing.Icon;
 import javax.swing.JLabel;
@@ -24,16 +26,16 @@ final class FileListRenderer extends DefaultTableCellRenderer
         super.getTableCellRendererComponent(table, value, isSelected, false, row, column);
         if (isSelected)
         {
-            setBackground(ChooserStyle.SELECTION);
+            setBackground(Style.SELECTION);
         }
         else
         {
-            setBackground(row % 2 == 0 ? ChooserStyle.BG_TERTIARY : ChooserStyle.BG_SECONDARY);
+            setBackground(row % 2 == 0 ? Style.BG_TERTIARY : Style.BG_SECONDARY);
         }
-        setForeground(ChooserStyle.TEXT);
+        setForeground(Style.TEXT);
         setIcon(null);
         setHorizontalAlignment(JLabel.LEFT);
-        setBorder(BorderFactory.createEmptyBorder(0, ChooserStyle.px(4), 0, ChooserStyle.px(4)));
+        setBorder(BorderFactory.createEmptyBorder(0, Style.px(4), 0, Style.px(4)));
         FileListModel.FileEntry entry = model.entryAt(table.convertRowIndexToModel(row));
         if (entry == null)
         {
@@ -54,7 +56,7 @@ final class FileListRenderer extends DefaultTableCellRenderer
                 setHorizontalAlignment(JLabel.RIGHT);
                 if (entry.isDirectory() && !isSelected)
                 {
-                    setForeground(ChooserStyle.TEXT_MUTED);
+                    setForeground(Style.TEXT_MUTED);
                 }
                 break;
             case FileListModel.COL_DATE:
@@ -64,7 +66,7 @@ final class FileListRenderer extends DefaultTableCellRenderer
                 setText(entry.type());
                 if (!isSelected)
                 {
-                    setForeground(ChooserStyle.TEXT_MUTED);
+                    setForeground(Style.TEXT_MUTED);
                 }
                 break;
             default:

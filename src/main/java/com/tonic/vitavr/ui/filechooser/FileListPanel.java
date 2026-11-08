@@ -1,5 +1,7 @@
 package com.tonic.vitavr.ui.filechooser;
 
+import com.tonic.vitavr.ui.Style;
+
 import javax.swing.BorderFactory;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
@@ -51,11 +53,11 @@ final class FileListPanel extends JPanel
     {
         super(new BorderLayout());
         this.store = store;
-        setBackground(ChooserStyle.BG_TERTIARY);
+        setBackground(Style.BG_TERTIARY);
         setupTable();
         JScrollPane scroll = new JScrollPane(table);
         scroll.setBorder(null);
-        scroll.getViewport().setBackground(ChooserStyle.BG_TERTIARY);
+        scroll.getViewport().setBackground(Style.BG_TERTIARY);
         add(scroll, BorderLayout.CENTER);
     }
 
@@ -63,12 +65,12 @@ final class FileListPanel extends JPanel
     {
         table.setShowGrid(false);
         table.setIntercellSpacing(new Dimension(0, 0));
-        table.setRowHeight(ChooserStyle.ROW_HEIGHT);
-        table.setBackground(ChooserStyle.BG_TERTIARY);
-        table.setForeground(ChooserStyle.TEXT);
-        table.setSelectionBackground(ChooserStyle.SELECTION);
-        table.setSelectionForeground(ChooserStyle.TEXT);
-        table.setFont(ChooserStyle.font(ChooserStyle.FONT_SIZE));
+        table.setRowHeight(Style.ROW_HEIGHT);
+        table.setBackground(Style.BG_TERTIARY);
+        table.setForeground(Style.TEXT);
+        table.setSelectionBackground(Style.SELECTION);
+        table.setSelectionForeground(Style.TEXT);
+        table.setFont(Style.font(Style.FONT_SIZE));
         table.setFillsViewportHeight(true);
         table.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
         table.setAutoCreateRowSorter(false);
@@ -78,12 +80,12 @@ final class FileListPanel extends JPanel
         {
             table.getColumnModel().getColumn(i).setCellRenderer(renderer);
         }
-        column(FileListModel.COL_ICON, ChooserStyle.px(28)).setMinWidth(ChooserStyle.px(28));
-        column(FileListModel.COL_ICON, ChooserStyle.px(28)).setMaxWidth(ChooserStyle.px(28));
-        column(FileListModel.COL_NAME, ChooserStyle.px(200));
-        column(FileListModel.COL_SIZE, ChooserStyle.px(80));
-        column(FileListModel.COL_DATE, ChooserStyle.px(130));
-        column(FileListModel.COL_TYPE, ChooserStyle.px(100));
+        column(FileListModel.COL_ICON, Style.px(28)).setMinWidth(Style.px(28));
+        column(FileListModel.COL_ICON, Style.px(28)).setMaxWidth(Style.px(28));
+        column(FileListModel.COL_NAME, Style.px(200));
+        column(FileListModel.COL_SIZE, Style.px(80));
+        column(FileListModel.COL_DATE, Style.px(130));
+        column(FileListModel.COL_TYPE, Style.px(100));
 
         JTableHeader header = table.getTableHeader();
         header.setReorderingAllowed(false);
@@ -171,16 +173,16 @@ final class FileListPanel extends JPanel
             table.setRowSelectionInterval(row, row);
         }
         File selected = selectedFile();
-        JPopupMenu menu = ChooserStyle.menu();
+        JPopupMenu menu = Style.menu();
         if (selected != null && selected.isDirectory())
         {
             if (store.isPinned(selected))
             {
-                ChooserStyle.menuItem(menu, "Unpin from Quick Access", () -> store.unpin(selected));
+                Style.menuItem(menu, "Unpin from Quick Access", () -> store.unpin(selected));
             }
             else
             {
-                ChooserStyle.menuItem(menu, "Pin to Quick Access", () -> store.pin(selected));
+                Style.menuItem(menu, "Pin to Quick Access", () -> store.pin(selected));
             }
         }
         if (mode == FileChooserMode.SAVE_FILE)
@@ -189,10 +191,10 @@ final class FileListPanel extends JPanel
             {
                 menu.addSeparator();
             }
-            ChooserStyle.menuItem(menu, "New Folder", this::createNewFolder);
+            Style.menuItem(menu, "New Folder", this::createNewFolder);
             if (selected != null)
             {
-                ChooserStyle.menuItem(menu, "Delete", this::deleteSelectedFiles);
+                Style.menuItem(menu, "Delete", this::deleteSelectedFiles);
             }
         }
         if (menu.getComponentCount() > 0)
@@ -405,12 +407,12 @@ final class FileListPanel extends JPanel
         HeaderRenderer()
         {
             label.setOpaque(true);
-            label.setBackground(ChooserStyle.BG_SECONDARY);
-            label.setForeground(ChooserStyle.TEXT);
-            label.setFont(ChooserStyle.font(11));
+            label.setBackground(Style.BG_SECONDARY);
+            label.setForeground(Style.TEXT);
+            label.setFont(Style.font(11));
             label.setBorder(BorderFactory.createCompoundBorder(
-                    BorderFactory.createMatteBorder(0, 0, 1, 0, ChooserStyle.BORDER),
-                    BorderFactory.createEmptyBorder(ChooserStyle.px(4), ChooserStyle.px(4), ChooserStyle.px(4), ChooserStyle.px(4))));
+                    BorderFactory.createMatteBorder(0, 0, 1, 0, Style.BORDER),
+                    BorderFactory.createEmptyBorder(Style.px(4), Style.px(4), Style.px(4), Style.px(4))));
         }
 
         @Override
