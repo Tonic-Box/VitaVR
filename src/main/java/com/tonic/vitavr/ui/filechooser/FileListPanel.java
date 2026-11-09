@@ -423,7 +423,7 @@ final class FileListPanel extends JPanel
             int modelColumn = table.convertColumnIndexToModel(column);
             if (modelColumn == model.sortColumn() && !text.isEmpty())
             {
-                text += model.sortAscending() ? " ▴" : " ▾";
+                text += model.sortAscending() ? " ▲" : " ▼";
             }
             label.setText(text);
             label.setHorizontalAlignment(modelColumn == FileListModel.COL_SIZE ? JLabel.RIGHT : JLabel.LEFT);

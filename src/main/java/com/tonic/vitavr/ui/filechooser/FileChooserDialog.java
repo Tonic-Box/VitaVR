@@ -12,9 +12,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * replacing JFileChooser: a breadcrumb path bar, pinned and recent places, a
- * sortable file table and type filters, in the client's side theme. Opens in the directory of the last
- * pick and remembers the directory of each approved one.
+ * A file dialog in place of JFileChooser: a breadcrumb path bar, pinned and recent places, a sortable file table and
+ * type filters, in the client's side theme. Opens in the directory of the last pick and remembers the directory of each
+ * approved one.
  */
 public final class FileChooserDialog extends JDialog
 {
