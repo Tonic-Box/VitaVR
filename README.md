@@ -1,3 +1,6 @@
+# NOTICE
+Migrated to [VitaPluginsSource](https://github.com/Tonic-Box/VitaPluginsSource/tree/main/vitavr) as part of a multi-gradle project for all of my plugins.
+
 # VitaVR
 VitaVR is a VitaLite plugin that lets you play in a VR headset, and switch back to the desktop at any time without logging out.
 - Play in first person, or as a tabletop view
